@@ -21,6 +21,26 @@ set, which was known as the ALX print train at Brown.
 A separately modified version of the Unix utility paps can be
 used to turn the UTF-8 results into a PDF file.
 
+Trans takes a file in a very limited format:
+lines starting with # are comments
+all other lines start with an 8-bit code point position,
+_e.g._ `0xff`, a space, and then a replacement value (which may be multiple
+UTF-8 bytes).
+
+If the replacement value starts with `"` then it's a quoted
+string, so you enter UTF8 literally in your editor. The string can contain `"`,
+but cannot contain whitespace. The closing quote is not validated.
+
+otherwise, any non-whitespace charcters are treated as the replacement.
+
+If the replacement value starts with `0x` then the following string of hexadecimal
+digit pairs is copied as literal bytes.
+
+Because hercules won't output EBCDIC directly, trans first reverses the EBCDIC->ASCII
+translation, so that the code points can be defined in terms of the EBCDIC code page.
+The specific reversible translation is hard-wired in to correspond to our Hercules
+setup.
+
 slc:
 slc converts .itext files (stored as .punch output from
 hercules) into IMLAC memory images, logging a bunch of stuff
