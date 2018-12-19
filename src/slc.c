@@ -98,15 +98,15 @@ int main(int argc, char** argv) {
    FILE *init_mem = fopen(argv[1], "r");
    FILE *in = fopen(argv[2], "r");
    FILE *out =fopen(argv[3], "w");
-   size_t i;
    int c;
    int please_zero = 1;
+   int i;
    unsigned char card_buf[COLS+1];
    unsigned char mem[1024*16];
    card_buf[COLS]='\0';
    bzero(mem, sizeof(mem));
    c = fgetc(init_mem);
-   for(int i=0; !feof(init_mem) && i<sizeof(mem); i++) {
+   for(i=0; !feof(init_mem) && i<(int)sizeof(mem); i++) {
       mem[i] = c;
       c = fgetc(init_mem);
       please_zero = 0;
@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
    while (read_card(in, card_buf) != EOF) {
       process_item(in, mem, card_buf);
    }
-   for(int i=0; i<sizeof(mem); i++)
+   for(i=0; i<sizeof(mem); i++)
       fputc(mem[i], out);
    fclose(out);
    fclose(in);
