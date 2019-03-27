@@ -1,0 +1,132 @@
+:READ  MERGE2   ASSEMBLE C1 WORK    3/26/19  22:00
+         MACRO                                                          00000100
+&LAB     MCALL &ENTRYPT                                                 00000200
+&LAB     L     15,=V(&ENTRYPT)   LOAD BRANCH ADDRESS                    00000300
+         BALR  14,15                                                    00000400
+         MEND                                                           00000500
+         PRINT NOGEN                                                    00000600
+         EXTRN HYPRTEXT,CARD                                            00000700
+MERGE2   ENTER                                                          00000800
+         OPEN  GDCB                                                     00000900
+         ASGNBFR GDCB,BUFLEN                                            00001000
+         SPAR  GACB                                                     00001100
+         GREADR CLEAR,MIP,GDCB,MERSAV01                                 00001200
+         WAIT  1,ECB=CLEAR                                              00001300
+*        RELOCATE STUFF IN BUFFER                                       00001400
+         LH    2,GDCB+16               BUFFER START ADDRESS             00001500
+         STH   2,ZERO                  + 0 = BUFFER START ADDRESS       00001600
+         LH    3,WHNAM                 WHERE DS NAME READ IN FROM       00001700
+         AR    3,2                                                      00001800
+         STH   3,WHNAM                 WHERE DS DS NAME WILL BE         00001900
+         LA    3,15(3)                 PUT CURSOR AFTER DS PREFIX       00002000
+         STH   3,CURSADD               BUFFER ADDR TO INSERT CURSOR AT  00002100
+         LH    3,WHLAB                 WHERE LABEL READ IN FROM         00002200
+         AR    3,2                                                      00002300
+         STH   3,WHLAB                                                  00002400
+         L     3,WRITERA        GET ADDR FOR BUFFER WRITING ROUTINE     00002500
+         BALR  2,3      GO WRITE OUT DISPLAY AND INSERT CURSOR          00002600
+         WAITR 1,ECB=MAINLINE                                           00002700
+         CLOSE (GDCB)                                                   00002800
+         L     13,4(13)                                                 00002900
+         RETURN (14,12)                                                 00003000
+         EJECT                                                          00003100
+         USING *,3                                                      00003200
+WRITER   MVI   REQUEST,0               CLEAR WIAT BYTE                  00003300
+         GWRITE REQUEST,BUF,GDCB,300,REQMESS,ZERO                       00003400
+         WAIT  1,ECB=REQUEST                                            00003500
+         MVI   INSERTC,0               CLEAR WAIT BIT                   00003600
+         GCNTRL INSERTC,INS,GDCB,CURSADD                                00003700
+         WAIT  1,ECB=INSERTC                                            00003800
+         MVI   START,0                 CLEAR WAIT BIT                   00003900
+         GCNTRL START,STR,GDCB,ZERO                                     00004000
+         WAIT  1,ECB=START                                              00004100
+         BR    2                       RETURN                           00004200
+         DROP  3                                                        00004300
+         EJECT                                                          00004400
+         USING *,15                                                     00004500
+ATTNROUT STM   14,12,12(13)            SAVE SUPER'S REGS                00004600
+         B     SAVEAREA+72             BRANCH AROUND SAVEAREA           00004700
+SAVEAREA DC    18F'0'                                                   00004800
+         LR    14,13                   SAVE HSA IN 14                   00004900
+         LA    13,SAVEAREA             ESTABLISH 13 AS BASE             00005000
+         ST    13,8(14)                STORE 13 IN HSA                  00005100
+         ST    14,4(13)                SAVE HSA IN MY SAVEAREA          00005200
+         DROP  15                                                       00005300
+         USING SAVEAREA,13             TELL ASSEMBLER OF MY INTENTIONS  00005400
+         SR    15,15                   CLEAR TO PREVENT ADDR BOMB       00005500
+         IC    15,COMAREA+3            GET ATTN TYPE                    00005600
+         SLL   15,2                    MULT BY 4 TO GET INDEXABLE NO.   00005700
+         L     15,ATTNADDR-4(15)       GET ADDR OF CORRECT ROUTINE      00005800
+         BR    15                      AND GO TO IT                     00005900
+ATTNADDR DC    A(END,CANCEL,0,0,CANCEL)                                 00006000
+         SPACE 3                                                        00006100
+END      L     5,=A(HYPRTEXT)          GET USER'S TEXT DCB ADDR         00006200
+         MVC   37(3,5),=AL3(XLSTADD)   MOVE IN MY EXLST ADDR            00006300
+         MVC   40(8,5),=CL8'HFILE'       HIFLE IS ON AVDPAK             00006400
+         RDJFCB (HYPRTEXT)                                              00006500
+         MVI   INNAME,0                CLEAR WAIT BIT                   00006600
+         GREAD INNAME,BUF,GDCB,44,EXLST,WHNAM                           00006700
+         WAIT  1,ECB=INNAME                                             00006800
+         MVI   INLAB,0                 CLEAR WAIT BIT                   00006900
+         GREAD INLAB,BUF,GDCB,6,LABPARM+2,WHLAB                         00007000
+         WAIT  1,ECB=INLAB                                              00007100
+         OPEN  (HYPRTEXT,(INOUT)),TYPE=J    JFCB ALREADY IN CORE        00007200
+         L     5,=A(CARD)              GET INPUT DCB ADDR               00007300
+         MVC   40(8,5),=C'SYSPUNCH'      CHANGE DDNAME FOR ONLINE       00007400
+*                                       MERGE                           00007500
+         LA    1,LABADD                TXT360IN EXPECTS TO BE PASSED    00007600
+*                                      A LABEL IN THE PARM FIELD OF     00007700
+*                                      THE JOB CARD, SO FAKE IT         00007800
+         MCALL TXT360IN                LET HIM DO THE DIRTY WORK        00007900
+         B     *+4(15)                 RETURN CODE IN 15                00008000
+         B     POST                    RC = 0 MEANS NORMAL RETURN       00008100
+         MVC   IFDUPLIC(50),DUPLABEL   TELL HIM LABEL IS DUPLICATE      00008200
+         L     3,WRITERA         GET ADDRESS OF WRITER                  00008300
+         BALR  2,3           AND LINK TO THE SUBROUTINE                 00008400
+         B     RETURN                  LET HIM TRY AGAIN                00008500
+WRITERA  DC    A(WRITER)                                                00008600
+DUPLABEL DC    CL50'THAT LABEL ALREADY EXISTS; TRY ANOTHER OR CANCEL'   00008700
+POST     POST  MAINLINE                                                 00008800
+RETURN   L     13,4(13)                                                 00008900
+         RETURN (14,12)                                                 00009000
+CANCEL   EQU   POST                                                     00009100
+         DS    0F                                                       00009200
+XLSTADD  DC    X'87',AL3(EXLST)                                         00009300
+EXLST    DS    176X                                                     00009400
+LABADD   DC    A(LABPARM)                                               00009500
+LABPARM  DC    H'6',CL6' '                                              00009600
+         EJECT                                                          00009700
+GDCB     DCB   DSORG=GS,MACRF=(WC,RC),GTYPE=BASIC,DDNAME=SCOPE          00009800
+BUFLEN   DC    H'8192'                                                  00009900
+GACB     SAEC  DCB=GDCB,EP=ATTNROUT,COMAREA=COMAREA,PFKMSK=(0),        X00010000
+               RESTART=YES,ATTNTYP=(END,CANCEL)                         00010100
+         TITLE 'GRAPHICS DISPLAY FOR MERGE'                             00010200
+         GINIT                                                          00010300
+REQMESS  GSRT                                                           00010400
+         GEVM                                                           00010500
+         GDV   10,3200,B                                                00010600
+         GECP  B                                                        00010700
+         GTXT  'NAME OF DATA SET YOU WISH TO ADD TO: '                  00010800
+         GEVM                                                           00010900
+         GDV   100,2850,B                                               00011000
+         GECF  L                                                        00011100
+DNAM     DC    CL44'SYS1.P1518.AVD.'                                    00011200
+         GEVM                                                           00011300
+         GDV   10,2500,B                                                00011400
+         GECP  B                                                        00011500
+         GTXT  'HIT JUMP KEY AND ENTER LABEL YOU WISH TO ATTACH TO THISX00011600
+                AREA: '                                                 00011700
+         GECF  L                                                        00011800
+WLAB     GTXT  '      '     WHERE LABEL IS TYPED IN                     00011900
+         GECP  L                                                        00012000
+         GCNL  4                                                        00012100
+IFDUPLIC DC    CL50' '                                                  00012200
+BACK     GTRU  0                                                        00012300
+WHNAM    DC    AL2(DNAM-REQMESS)  BUFF ADDRESS TO READ DS NAME FROM     00012400
+WHLAB    DC    AL2(WLAB-REQMESS)  BUFFER ADDRESS WHERE LABEL TYPE IN    00012500
+CURSADD  DS    H                                                        00012600
+MAINLINE DC    F'0'                    MAINLINE WAIT ECB                00012700
+COMAREA  DC    4F'0'                                                    00012800
+ZERO     EQU   BACK+2                  WHERE TO WRITE OUT DISPLAY       00012900
+         LTORG                                                          00013000
+         END   MERGE2                                                   00013100

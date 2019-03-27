@@ -1,6 +1,10 @@
+# Fress Hacks
+
 Various quick hacks to deal with fress and fress/imlac
 files of various sorts. Source and makefile live in src.
 edit the makefile as you wish, then runn it.
+
+# What they are and how to build
 
 Various scripts assume that the output binaries are in your
 path.
@@ -53,3 +57,16 @@ approach in trans, and the reversible EBCDIC/ASCII translation
 used for the the printer files, and convert these to
 ASCII images, so that we can modify the patches to get the
 resulting images to function correctly. 
+
+# Bonus: directory HES 
+
+This contains the relatively unexamined source of the first
+Brown hypertext system as described in van Dam, Carmody, and Nelson's
+paper. This was the forerunner of Fress. One thing I never knew but
+learned from scanning this briefly is that the Fress formatting
+language is a derivative of the text360 formatting language.
+
+Edit/Alter codes, and some of the syntax.
+
+The papers are there in original form as used by HES, which
+includes extra stuff for linking, etc.

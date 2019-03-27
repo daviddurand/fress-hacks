@@ -1,0 +1,70 @@
+:READ  WHEN     ASSEMBLE C1 WORK    3/26/19  22:00
+*********************************************************************** 00000100
+*                             W H E N                                 * 00000200
+*                                                                     * 00000300
+*              PROVIDES FORMATTED TIME-DAY-MONTH-YEAR IN A 34 BYTE    * 00000400
+*              AREA PROVIDED BY THE CALLER.  ADDRESS OF AREA  IS        00000500
+*              PROVIDED IN R1.  ALL REGS RETURNED ENTACT.             * 00000600
+*********************************************************************** 00000700
+WHEN     CSECT                                                          00000800
+         USING *,15                                                     00000900
+         STM   14,4,12(13)         SAVE REGS                            00001000
+         LR    3,15                LOAD BASE                            00001100
+         USING WHEN,3              ADDRESSABILITY                       00001200
+         DROP  15                                                       00001300
+         LR    2,1                 BASE FOR OUTPUT AREA                 00001400
+         USING OUTLINE,2           ADDRESSABILITY FOR OUTPUT            00001500
+         TIME  ,                   GET TIME.                            00001600
+         ST    0,40(13)            STORE TIME FOR UNPACKING             00001700
+         MVC   GTIME,TIMEPAT                                            00001800
+         ED    GTIME,40(13)        EDIT TIME                            00001900
+         LR    0,1                 GET DATE.                            00002000
+         SRDL  0,16                                                     00002100
+         STC   0,PCKDYEAR                                               00002200
+         N     0,F3                                                     00002300
+         BNZ   TIMEL001                                                 00002400
+         MVI   FEB+1,X'9F'                                              00002500
+TIMEL001 SRL   1,16                                                     00002600
+         STH   1,PCKDDAY                                                00002700
+         OI    PCKDDAY+1,X'0F'                                          00002800
+         LA    4,TMONTHS                                                00002900
+TIMELP01 SP    PCKDDAY(2),0(2,4)                                        00003000
+         BNH   TIMEL002                                                 00003100
+         LA    4,21(4)                                                  00003200
+         B     TIMELP01                                                 00003300
+TIMEL002 AP    PCKDDAY(2),0(2,4)                                        00003400
+         MP    PCKDDAY-2(4),P10                                         00003500
+         MVC   PCKDDATE(1),PCKDDAY                                      00003600
+         MVC   GDATE,2(4)                                               00003700
+         ED    GDATE,PCKDDATE                                           00003800
+         LM    14,4,12(13)         RESTORE REGS                         00003900
+         BR    14                  RETURN                               00004000
+*********************************************************************** 00004100
+*              JUNK FOR EDITING TIME AND DATE.                          00004200
+F3       DC    F'3'                                                     00004300
+         DC    H'0'                                                     00004400
+PCKDDAY  DS    H                                                        00004500
+P10      DC    PL2'10'                                                  00004600
+DRAWSWIT DC    X'FF'                                                    00004700
+PCKDDATE DS    X                                                        00004800
+PCKDYEAR DS    X                                                        00004900
+TMONTHS  DC    PL2'31',X'40402120',C' JANUARY, 19',X'202040'            00005000
+FEB      DC    PL2'28',X'40402120',C' FEBRUARY, 19',X'2020'             00005100
+         DC    PL2'31',X'4040402120',C' MARCH, 19',X'20204040'          00005200
+         DC    PL2'30',X'4040402120',C' APRIL ,19',X'20204040'          00005300
+         DC    PL2'31',X'404040402120',C' MAY, 19',X'2020404040'        00005400
+         DC    PL2'30',X'4040402120',C' JUNE, 19',X'2020404040'         00005500
+         DC    PL2'31',X'4040402120',C' JULY, 19',X'2020404040'         00005600
+         DC    PL2'31',X'40402120',C' AUGUST, 19',X'20204040'           00005700
+         DC    PL2'30',X'402120',C' SEPTEMBER, 19',X'2020'              00005800
+         DC    PL2'31',X'40402120',C' OCTOBER, 19',X'202040'            00005900
+         DC    PL2'30',X'40402120',C' NOVEMBER, 19',X'2020'             00006000
+        DC    PL2'31',X'40402120',C' DECEMBER, 19',X'2020'              00006100
+TIMEPAT  DC    X'4021207A20207A20204B2020'                              00006200
+OUTLINE  DSECT                                                          00006300
+GTIME    DC    CL12' '                                                  00006400
+         DC    CL3' '                                                   00006500
+GDATE    DC    CL19' '                                                  00006600
+*********************************************************************** 00006700
+         END                                                            00006800
+

@@ -1,0 +1,199 @@
+:READ  SPACEORD ASSEMBLE C1 WORK    3/26/19  22:00
+         PRINT NOGEN                                                    00000100
+****** SPACEORD   ********                                              00000200
+***  MAKES SPACE FOR INSERT OF ORDER IN DATA STRUCUTRE                  00000300
+**  TAKES THE LENGTH OF THE IERT IN REGISTER 3                          00000400
+*** IF HAS TO SPLIT A CHARACER STRING IF HIT IN MIDDLE OF ORDER, DOES   00000500
+** RETURNS:  INSERT POINT IN REG 6, ABSOLUTE CORE ADDRESSS              00000600
+         SPACE 1                                                        00000700
+SPACEORD   CSECT                                                        00000800
+         B     16(15)                                                   00000900
+         DC    AL1(7)                                                   00001000
+        DC   CL7'SPACEOR'                                               00001100
+SPASAV  DC    F'0'               DOESN'T CALL ANYONE => NO SAVEAREA     00001200
+          STM  14,12,12(13)                                             00001300
+     LR   14,13                                                         00001400
+             LA    13,12(15)                                            00001500
+        USING   SPASAV,13                                               00001600
+         ST    13,8(14)                                                 00001700
+        ST    14,SPASAV          SAVE HSA ADDR                          00001800
+         SR    11,11                                                    00001900
+         ST    11,SPLITIT        ZERO THE SPLIT FLAG                    00002000
+         L     12,=V(OPOINT1)                                           00002100
+         L     4,=V(ORDERS)                                             00002200
+         L     4,0(4)                GET CORE ADDRESS OF ORDERS ID ITEM 00002300
+         LH    5,6(4)          GET LENGTH OF ORDERS SECTION             00002400
+         SH    5,6(12)           GET LENGTH-1 TO MOVE FROM OPOINT       00002500
+         S     5,=F'12'      ** R5 = LENTH OF ORDERS AFTER HIT          00002600
+         BE    BELOWALL  IF NEW ORDER GOING BEOLW ALL OTHERS            00002700
+         MVI   NOP+1,X'00'        FALL THROUGH NOP                      00002800
+         L     6,8(4)          GET ORDERS DISPLACEMENT                  00002900
+         AR    6,4             GET ORDERS BEGIN CORE ADDRESS            00003000
+         LR    8,6               GET CORE ADDRESS OF HIT POINT IN R8    00003100
+         AH    8,6(12)         ** ORDERS ADD + DISP = HIT PT (OPOINT)   00003200
+**       TEST FOR LAST ORDER                                            00003300
+         TM    0(8),X'80'      TEST ORDER FOR LAST BIT                  00003400
+         BZ    L1              IF NOT LAST BIT                          00003500
+         XI    0(8),X'80'      CLEAR LAST BIT FF SET                    00003600
+         MVI   LAST,X'80'      SET FLAG FORLAST BIT IN LAST             00003700
+          B    *+8                                                      00003800
+L1       MVI   LAST,X'00'      CLEAR LAST BIT IF NOT LAST               00003900
+         CLI   0(8),X'01'         HIT ORDER CHAR STRING?                00004000
+         BE    SPLIT              IF SO, BRANCH                         00004100
+*        IF AM INSERTING FORMAT AT SOMETHINF OTFER THAN CHAR STRING     00004200
+*        THEN THE INSERT GOES ABOVE THE 'OTHER THING'                   00004300
+         LR    15,12              POINTER TO OPOINT1                    00004400
+         BCTR  15,0               TO FIND TYPE OF DS CHANGE             00004500
+         CLI   0(15),X'09'        IF INSERTIGN, PUT BEFORE              00004600
+         BL    S2                 BRANCH IF NOT INSERTING FORMAT        00004700
+         B     SETMOVE       SET NOP TO MOVE ONLY STUFF BELOW           00004800
+SPLIT    LH    11,10(12)          DISP WITHIN ORDER                     00004900
+         LTR   11,11                                                    00005000
+         BE    SETMOVE  IF INSERT REALLY GOING ABOVE                    00005100
+         CH    11,2(8)            CHECK IF HIT ON LAST CHAR             00005200
+         BE    S2              IF HIT ON LAST CHARACTER, NO SPLIT       00005300
+         MVI   SPLITIT+3,X'08'   SET THE SPLIT FLAG WITH AN EIGHT       00005400
+S2       SR    11,11             CLEAR REG 11                           00005500
+         IC    11,0(8)           GET ORDER CODE OF HIT DISP ORDER       00005600
+         N     11,=XL4'3F'     CLEAR ORDER BITS                         00005700
+         SLL   11,2            MULTIPLY BY FOUR FOR BRANCH TABLE        00005800
+         L     11,TYPE2(11)      GET LENGTH OF HIT ORDER                00005900
+NOP      NOP   *+8                                                      00006000
+         AR    8,11              MOVEFROM PT = HITPT + LENGTH OF HIT OR 00006100
+         SR    5,11            GET LENGTH PAST HIT ORDER                00006200
+         LR    10,8              SAVE MOVE FROM = INSERT ADDRESS        00006300
+         LR    7,5             GET LENGTH TO MOVE IN REG 7              00006400
+         L     9,=V(SWAP)          USE MICHEL'S BUFFER                  00006500
+MOVEIT   C     7,=F'256'         TEXT FOR MOVE OF GREATER THAN 256 CHAR 00006600
+         BH    OVERMOVE          IF MORE THAN 256 CHARS TO MOVE, >1 MVC 00006700
+         BCTR  7,0                                                      00006800
+         EX    7,MVCSCRAT        MOVE THE LENGTH INTO SCRATCHAREA       00006900
+         B     MOVEBACK          NOW MOVE BACK FARTHER DOWN             00007000
+         SPACE 1                                                        00007100
+OVERMOVE MVC   0(256,9),0(8)     MOVE FIRST 256 CHARS INTO SCRATCH      00007200
+         LA    8,256(8)          INCRMENET DS POINTER                   00007300
+         LA    9,256(9)          INCREMENT SCRATCH AREA POINTER         00007400
+         S     7,=F'256'         DECREMEN LENGTH LEFT TO MOVE           00007500
+         B     MOVEIT            BACK TO MOVE MORE                      00007600
+         SPACE 2                                                        00007700
+MOVEBACK LR    8,10              GET MOVEFROM = INSERT ADDRESS IN ¢8    00007800
+         AR    8,3               ADD LENGTH OF ORDER TO GET MOVETO PT   00007900
+         A     8,SPLITIT         + 1 WORD IF SPLIT; SAME IF NO SPLIT    00008000
+         L     9,=V(SWAP)          USE MICHEL'S BUFFER                  00008100
+         LR    7,5               GET LENGTH -1 TO BE MOVED              00008200
+MOVEITBK C     7,=F'256'         CHECK FOR > 1 MVC                      00008300
+         BH    OVEMOVE           IF GREATER THAN 1 MVC                  00008400
+         LTR   7,7               IS LENTH REMAINING = 0                 00008500
+         BE    OUT         IF LENTH OF REMAINING ORDERS IS ZERO         00008600
+         BCTR  7,0           FOR THE MVC                                00008700
+         EX    7,MVCBACK         MOVE THE REMAINING STRING BACK TO DS   00008800
+         B     OUT                                                      00008900
+         SPACE 1                                                        00009000
+OVEMOVE  MVC   0(256,8),0(9)     MOVE 256 CHARS BACK IF > 1 MVC         00009100
+         LA    8,256(8)          INCREMENT DS POINTER                   00009200
+         LA    9,256(9)          ICREMENT SCRATCH AREA POINTER          00009300
+         S     7,=F'256'         DECREMENT LENGTH LEFT TO BE MOVED      00009400
+         B     MOVEITBK          BACK TO MOVE MOVE                      00009500
+SETMOVE  MVI   NOP+1,X'F0'        SET BRANCH                            00009600
+         CLI   LAST,X'80'                                               00009700
+         BNE   S2                                                       00009800
+         OI    0(8),X'80'                                               00009900
+         MVI   LAST,0                                                   00010000
+         B     S2                 SKIP SPLIT FLAG SETTING               00010100
+BELOWALL LH    5,6(4)             LENTH OF ID                           00010200
+         LA    5,0(5,4)           R5 POINTS JUST PAST LAST ORDER        00010300
+         LR    6,5                R6 ON RETURN POINTS TO INSERT POINT   00010400
+         BCTR  5,0                                                      00010500
+         SR    1,1                                                      00010600
+         IC    1,0(5)             CODE OF LAST ORDER                    00010700
+         SLL   1,2                                                      00010800
+         S     5,TYPE2(1)  R 5 POINTS TO BYTE (LAST) OF ORDER BEFORE LA 00010900
+         XI    1(5),X'80'         CLEAR LAST BIT                        00011000
+         MVI   LAST,X'80'         NEW ORDER GETS TAGGED AS LAST LATER   00011100
+         B     OUT+2                                                    00011200
+         EJECT                                                          00011300
+*** NOW TO FIX UP DATA STDCUTRE: INCREMENT LENGTH, CHANGE DATA ADDRESS, 00011400
+***** SPLIT A CHARACTER STRING IFNECESSARY                              00011500
+         SPACE 1                                                        00011600
+OUT      LR    6,10              GET INSERT POINT IN R6                 00011700
+         LH    5,6(4)            UPDATE LENGTH OF ID ITEM:              00011800
+         A     5,SPLITIT         ** OLD LENGTH + SPLIT LENGTH +         00011900
+         AR    5,3               ** + LENGTH OF NW ORDER                00012000
+         STH   5,6(4)            RESTORE NEW LENGTH OF ITEM             00012100
+         SPACE 1                                                        00012200
+** NOW SPLIT IF NECESSARY                                               00012300
+         XR    1,1             CLEAR REG 1                              00012400
+         C     1,SPLITIT       TEST FOR SPLIT NECESSARY                 00012500
+         BE    RETURN            IF NO SPLIT RETURN                     00012600
+         LR    7,10              GET INSERT POINT IN R7                 00012700
+         SR    7,11              GET HIT POINT IN R7 BY - LENGTH        00012800
+         LH    8,2(7)          GET LENGTH OF CH STRING ORDER            00012900
+         LH    5,0(7)          GET ORDER CODE                           00013000
+         LH    9,4(7)          GET DATA DISP                            00013100
+         L     10,8(12)          GET LENGTH OF HIT FROM OPOINT          00013200
+         LR    11,10             SAVE LENGTH OF HIT                     00013300
+         STH   10,2(7)         STORE UPDATAED LENGTH IN DS ORDER        00013400
+         LA    7,0(6,3)          GET ADDRESS OF WORD PAST SPLIT INSERT  00013500
+         SR    8,11              GET NEW LENGTH FOR SPLIT HALF          00013600
+         BL    NEGLEN                                                   00013700
+         AR    9,11            GET NEW DISPLACEMENT IN DATA             00013800
+         STH   5,0(7)          PUT IN ORDER CODE + USUSED BYTE          00013900
+         STH   8,2(7)          GET NEW ORDER OF LENTGH                  00014000
+SETBIT   OC    0(1,7),LAST           PUT IN LAST BIT,IF SET, IN SPLIT   00014100
+         MVI   LAST,X'00'        CLEAR LAST FLAG                        00014200
+         STH   9,4(7)          ** THE SPLIT ORDER                       00014300
+         MVI   6(7),X'00'      UNUSED                                   00014400
+         SRL   5,8                     GET ORDER CODE BYTE              00014500
+         STC   5,7(7)        ORDER CODE                                 00014600
+RETURN  L     13,SPASAV          LOAD HSA ADDR*                         00014700
+         RETURN (14)                                                    00014800
+         SPACE 3                                                        00014900
+NEGLEN   ABEND 1002,DUMP                                                00015000
+*** DATA FOR SPACEORD                                                   00015100
+SPLITIT  DC    F'0'                                                     00015200
+TYPE2    DC    F'4,8,12,12,4,8,8,4,8,8,4'                               00015300
+MVCSCRAT MVC   0(0,9),0(8)                                              00015400
+MVCBACK  MVC   0(0,8),0(9)                                              00015500
+LAST     DC    X'00'                                                    00015600
+         ENTRY LAST                                                     00015700
+         EJECT                                                          00015800
+***  STRGINS  ******                                                    00015900
+** INSERTS CHARACTER STRING IN DATA AREA OF DATA STRUCUTRE, RETRNS      00016000
+**     THE DISPACEEMENT OF THE DATA IN REGISTER 7                       00016100
+**    GETS LENGTH + STRING IN OSTRING                                   00016200
+         SPACE 1                                                        00016300
+STRGINS  BALR  2,0                                                      00016400
+         USING *,2                                                      00016500
+         L     4,=V(DATA)                                               00016600
+         L     4,0(4)                GE T CORE ADDRESS OF DATA SECTION  00016700
+         L     5,8(4)          GET DATA DISP IN ID ITEM                 00016800
+         LA    5,0(5,4)          GET ABSOLUTE COREA DATA ADDRESS        00016900
+         L     7,0(5)            GET LENGTH OF DATA SECTION = DATA DISP 00017000
+         L     12,=V(OSTRING)    GET ADDRESS OF OSTRING                 00017100
+         LH    8,0(12)           GE LENGTH OF STRING TO INSERT OSTRING  00017200
+         LH    9,6(4)            GET LENGTH OF ENTIRE ITEM              00017300
+         AR    9,8               INCREMENT LENGTH OF STRING LENGTH      00017400
+         STH   9,6(4)            RESTORE NEWLENGTH                      00017500
+         LA    9,0(7,8)          GET NEW LENGTH OF DATA SECTION         00017600
+         ST    9,0(5)            STORE DATA SECTION LENGTH IN DATA SECT 00017700
+         AR    5,7               GET ADDRESS OF DATA INSERT PT IN R5    00017800
+         L     9,4(12)         GET ADDRESS OF STRING TO INSERT          00017900
+MOVEDTRY C     8,=F'256'         TEST FOR STRING LONGER THAN ONE MVC    00018000
+         BH    MOREMOVE          IF MORE THAN ONE MVC                   00018100
+         BCTR  8,0               GET LENGTH - 1 OF STRIGN FOR MVC       00018200
+         LTR   8,8                IF LEN <0, DON'T MOVE                 00018300
+         BL    *+8                IF LEN NOW <0, SKIP MVC               00018400
+         EX    8,MOVEDATA        MOVE THE REMAINING STRING              00018500
+         RETURN                                                         00018600
+         SPACE  1                                                       00018700
+MOREMOVE MVC   0(256,5),0(9)     MOVE 256CHARS IF MOE THEN ONE MVC NEED 00018800
+         LA    5,256(5)          INCREMENT INSERT POINT                 00018900
+         LA    9,256(9)          INCREMENT STRING POINTER               00019000
+         S     8,=F'256'         DECREMENT LENGTH LEFT                  00019100
+         B     MOVEDTRY          RETURN TO MOVE MORE                    00019200
+         SPACE 1                                                        00019300
+** DATA FOR STRGINS                                                     00019400
+MOVEDATA MVC   0(0,5),0(9)       MOVE FROM STRING TO DATA SECTION       00019500
+         LTORG                                                          00019600
+         ENTRY STRGINS,SPLITIT                                          00019700
+         END                                                            00019800

@@ -1,0 +1,262 @@
+:READ  TRANSMON ASSEMBLE C1 WORK    3/26/19  22:00
+         PRINT NOGEN                                                    00000100
+HOOTMON2 DSECT                                                          00000200
+         USING *,12                                                     00000300
+         LR    12,15                                                    00000400
+TOPLOOP  LOAD  EP=TRANSMON                                              00000500
+         LR    13,0                                                     00000600
+         BAL   11,72(13)                                                00000700
+         DELETE EP=TRANSMON                                             00000800
+         MVI   ECB,0                                                    00000900
+         ATTACH SF=(E,ATTACHL),MF=(E,CALL)                              00001000
+         LR    2,1                                                      00001100
+         WAIT  ECB=ECB                                                  00001200
+         MVC   FLAGFLD(1),29(2)                                         00001300
+         MVC   FLAGFLD+1(3),17(2)                                       00001400
+         ST    2,PARAM                                                  00001500
+DETACH   DETACH PARAM                                                   00001600
+         B     TOPLOOP                                                  00001700
+LINKLIB  DCB   DDNAME=LOADMODS,MACRF=(E),DSORG=PO,DEVD=DA,EXLST=EXLST   00001800
+ATTACHL  ATTACH ECB=ECB,EP=X,DCB=LINKLIB,LPMOD=1,SHSPV=123,SF=L         00001900
+EP       EQU   ATTACHL+28                                               00002000
+CALL     CALL  ,(PARAM),VL,MF=L                                         00002100
+ECB      DC    F'0'                                                     00002200
+FLAGFLD  DC    F'0'                                                     00002300
+PARAM    DC    H'0',CL40' '                                             00002400
+DSNAME   DC    CL44' '                                                  00002500
+         EJECT                                                          00002600
+TRANSMON CSECT                                                          00002700
+CRAZYMON EQU   *                                                        00002800
+         DC    18F'0'                                                   00002900
+         USING CRAZYMON,13                                              00003000
+         USING HOOTMON2,12         *                                    00003100
+         LA    2,LINKLIB                                                00003200
+         ST    2,LINKAD                                                 00003300
+         TM    48(2),X'10'                                              00003400
+         BO    NFIRST                                                   00003500
+         MVC   LINKLIB(JFCB-DDCB),DDCB                                  00003600
+         RDJFCB ((2))                                                   00003700
+         MVC   DSNAME,JFCB                                              00003800
+         OPEN  ((2),(INPUT)),TYPE=J                                     00003900
+         LR    9,14                                                     00004000
+         L     1,16                CVT                                  00004100
+         L     1,0(1)              TCBP                                 00004200
+         L     1,4(1)              TCB                                  00004300
+         L     1,24(1)             TCBMSS, SPQE                         00004400
+LOOPFA   CLI   4(1),0                                                   00004500
+         BE    SPZA                                                     00004600
+         L     1,0(1)                                                   00004700
+         B     LOOPFA                                                   00004800
+SPZA     L     1,4(1)              SPQE, SP 000                         00004900
+         L     1,4(1)              FIRST DQE, SP 000                    00005000
+         L     6,0(1)              BLOCK ADDRESS                        00005100
+         L     7,4(6)              FREE LENGTH                          00005200
+NFIRST   TM    FLAGFLD,X'80'       IF PREVIOUS TASK ABENDED             00005300
+         BZ    TIME                AND BYPASS THIS DISPLAY              00005400
+ABENDED  L     2,FLAGFLD           LOAD CCODE                           00005500
+         N     2,=X'00000FFF'      USER CCODE MASK                      00005600
+         BZ    NUCC                SYSTEM ABEND OCCURRED                00005700
+         CVD   2,WORK              CVD USER CCODE                       00005800
+         UNPK  UCC+1(4),WORK(8)    UNPACK IT                            00005900
+         OI    UCC+4,X'F0'         MAKE LAST BYTE NUMBER                00006000
+         MVC   CCODE(5),UCC                                             00006100
+         B     ABPSW               COMMON PATH WITH SYSTEM CCODE        00006200
+NUCC     MVC   UCC+1(2),FLAGFLD+1  EXTRACT SYSTEM CODE, TWO BYTES NNNX  00006300
+         UNPK  SCC+1(3),UCC+1(2)   UNPACK TO FNFNXN                     00006400
+         OI    SCC+3,X'F0'         MAKE IT FNFNFN                       00006500
+         TR    SCC+1(3),TRTAB      HEX CHARACTER OUTPUT                 00006600
+         MVC   CCODE(5),SCC        MOVE TO MESSAGE AREA                 00006700
+ABPSW    MVC   MESS(L'CCODEM),CCODEM                                    00006800
+TIME     L     1,16                CVT                                  00006900
+         L     1,0(1)              TCB POINTER BLOCK                    00007000
+         L     1,4(1)              CURRENT TCB                          00007100
+         L     5,24(1)             5 POINTS AT FIRST SPQE               00007200
+LOOPF    CLI   4(5),0              IF HAVE FOUND SUBPOOL 0 SPQE         00007300
+         BE    SPZ                 GO ZAP SUBPOOL 0                     00007400
+         L     5,0(5)              TRY NEXT SPQE                        00007500
+         B     LOOPF               ITERATE                              00007600
+SPZ      L     5,4(5)                                                   00007700
+         L     3,4(5)              FIRST DQE                            00007800
+DQELP    LM    2,5,0(3)            GET FQE, NDQE, BLK, LN FIELDS OF DQE 00007900
+         LTR   2,2                 IF NO FQE'S                          00008000
+         BZ    NGMAIN              BLOCK IS ENTIRELY ASSIGNED           00008100
+         MVC   0(8,2),=XL8'8'      ELSE OVERRIDE                        00008200
+         GETMAIN R,LV=8            AND GETMAIN ALL UNASSIGNED           00008300
+NGMAIN   CR    4,6                 IF BLOCK WITH SA, PARM, IOBS         00008400
+         BE    LT                  DON'T FREEMAIN                       00008500
+         FREEMAIN R,LV=(5),A=(4)                                        00008600
+LT       LTR   3,3                                                      00008700
+         BNE   DQELP                                                    00008800
+         FREEMAIN R,LV=(7),A=(6)                                        00008900
+         LA    1,GTIME+30                                               00009000
+         L     15,=V(WHEN)                                              00009100
+         BALR  14,15                                                    00009200
+         OPEN  SCOPE                                                    00009300
+         ASGNBFR SCOPE,ALL                                              00009400
+         MVI   MIP,0                                                    00009500
+         GREADR MIP,MIP,SCOPE,SAVE14                                    00009600
+         MVC   DSNAM,DSNAME                                             00009700
+         WAIT  ECB=MIP                                                  00009800
+         BAL   10,PUTMESS          WRITE INITIAL MESSAGE                00009900
+         MVI   K1,0                                                     00010000
+         GCNTRL K1,IND,SCOPE,OTT                                        00010100
+         WAIT  ECB=K1                                                   00010200
+         SPAR  GACB,PRTY=126                                            00010300
+         MVI   WAITWORD,0                                               00010400
+         WAIT  ECB=WAITWORD        MAINLINE WAIT                        00010500
+         DAR   GACB                                                     00010600
+         CLOSE SCOPE                                                    00010700
+         L     3,WAITWORD                                               00010800
+         BR    3                                                        00010900
+RUNUSER  MVC   EP(8),MESS                                               00011000
+         LA    3,40                                                     00011100
+         LA    2,PARM+39-PROGMESS+MESS                                  00011200
+LOOP     CLI   0(2),C' '                                                00011300
+         BNE   PARMFND                                                  00011400
+         BCTR  2,0                                                      00011500
+         BCT   3,LOOP                                                   00011600
+         STH   3,PARAM                                                  00011700
+         BR    11                                                       00011800
+PARMFND  STH   3,PARAM                                                  00011900
+         BCTR  3,0                                                      00012000
+         EX    3,MOVEP                                                  00012100
+         BR    11                                                       00012200
+MOVEP    MVC   PARAM+2(0),PARM-PROGMESS+MESS                            00012300
+QUIT     L     2,LINKAD                                                 00012400
+         CLOSE ((2))                                                    00012500
+         SR    15,15                                                    00012600
+         BR    9                                                        00012700
+         USING *,15                                                     00012800
+         DROP  12                                                       00012900
+ATTNROUT STM   14,12,12(13)                                             00013000
+         L     9,=A(CRAZYMON)                                           00013100
+         DROP  15                                                       00013200
+         ST    13,4(9)                                                  00013300
+         LR    13,9                                                     00013400
+         CLI   COMAREA+3,1                                              00013500
+         BE    ENDKEY                                                   00013600
+         MVI   GACB+8,0            RESET PFKMSK                         00013700
+         MVI   K2,0                                                     00013800
+         GCNTRL K2,IND,SCOPE,ZERO                                       00013900
+         WAIT  ECB=K2                                                   00014000
+         CLI   COMAREA+2,1                                              00014100
+         BH    FUNKY2                                                   00014200
+         BE    FUNKY1                                                   00014300
+FUNKY0   MVC   MESS(L'ABMESS),ABMESS                                    00014400
+         BAL   10,PUTMESS                                               00014500
+         ABEND 512,DUMP                                                 00014600
+FUNKY1   MVC   MESS(L'QUITMESS),QUITMESS                                00014700
+         BAL   10,PUTMESS                                               00014800
+         POST  WAITWORD,QUIT                                            00014900
+         B     ATTNRET                                                  00015000
+FUNKY2   MVC   MESS,PROGMESS                                            00015100
+         BAL   10,PUTMESS                                               00015200
+         MVI   CURIN,0                                                  00015300
+         GCNTRL CURIN,INS,SCOPE,NAMEINA                                 00015400
+         WAIT  ECB=CURIN                                                00015500
+         OI    GACB+15,1                                                00015600
+RSRT     MVI   STR,0                                                    00015700
+         GCNTRL STR,STR,SCOPE,BFRSRT                                    00015800
+         WAIT  ECB=STR                                                  00015900
+ATTNRET  L     13,4(13)                                                 00016000
+         LM    14,12,12(13)                                             00016100
+         BR    14                                                       00016200
+ENDKEY   MVI   READ,0                                                   00016300
+         GREAD READ,BUF,SCOPE,1000,GSRT,BFRSRT                          00016400
+         ORG   READ+22                                                  00016500
+         DC    AL2(GEND-GSRT)                                           00016600
+         ORG                                                            00016700
+         WAIT  ECB=READ                                                 00016800
+         L     2,LINKAD                                                 00016900
+         USING LINKLIB,2                                                00017000
+         CLC   DSNAM,DSNAME                                             00017100
+         BE    POSTER                                                   00017200
+         XC    UNOP,UNOP                                                00017300
+         MVC   DSNAME,DSNAM                                             00017400
+         DROP  2                                                        00017500
+         CLOSE ((2))                                                    00017600
+         MVC   0(JFCB-DDCB,2),DDCB                                      00017700
+         RDJFCB ((2))                                                   00017800
+         MVC   JFCB(44),DSNAM                                           00017900
+         SR    3,3                                                      00018000
+         LR    1,2                                                      00018100
+         ATTACH ECB=BCE,EP=OPENER,LPMOD=1,SHSPV=123                     00018200
+         ST    1,SAVE14                                                 00018300
+         ST    3,BCE                                                    00018400
+         WAIT  ECB=BCE                                                  00018500
+         DETACH SAVE14                                                  00018600
+         OC    BCE+1(3),BCE+1      SET COND CODE                        00018700
+         BZ    POSTERP                                                  00018800
+         MVI   DSNAME-LINKLIB(2),1                                      00018900
+         MVC   UNOP,=C' UNOPENABLE'                                     00019000
+         BAL   10,PUTMESS                                               00019100
+         MVI   CURSOR,0                                                 00019200
+         GCNTRL CURSOR,INS,SCOPE,NAMEINB                                00019300
+         WAIT  ECB=CURSOR                                               00019400
+         B     RSRT                                                     00019500
+POSTERP  MVC   0(JFCB-DDCB,2),DDCB                                      00019600
+         RDJFCB ((2))                                                   00019700
+         MVC   JFCB(44),DSNAM                                           00019800
+         OPEN  ((2),(INPUT)),TYPE=J                                     00019900
+POSTER   POST  WAITWORD,RUNUSER                                         00020000
+         MVC   MESS(8),EPNAME-PROGMESS+MESS                             00020100
+         MVC   MESS+8(26),=CL26' BEING FETCHED'                         00020200
+         BAL   10,PUTMESS                                               00020300
+         B     ATTNRET                                                  00020400
+PUTMESS  MVI   WRITE2,0                                                 00020500
+         GWRITE WRITE2,STR,SCOPE,1000,GSRT,BFRSRT                       00020600
+         ORG   WRITE2+22                                                00020700
+         DC    AL2(GEND-GSRT)                                           00020800
+         ORG                                                            00020900
+         WAIT  ECB=WRITE2                                               00021000
+         BR    10                                                       00021100
+         GINIT                                                          00021200
+GSRT     GSRT                                                           00021300
+         GEPM                                                           00021400
+         GDV   0,3500,B                                                 00021500
+         GECP  B                                                        00021600
+GTIME    DC    CL73'GRAPHIC MONITOR SYSTEM',X'1515'                     00021700
+         DC    C'KEY 1:  TERMINATE MONITOR',X'15'                       00021800
+         DC    C'KEY 2:  RUN USER PROGRAM ',X'151515'                   00021900
+         DC    C'CURRENT DATA SET:  '                                   00022000
+         GECF  B                                                        00022100
+DSNAM    DC    CL44' '                                                  00022200
+         GECP  B                                                        00022300
+         GCNL  1                                                        00022400
+UNOP     DC    XL11'0'                                                  00022500
+         GCNL  2                                                        00022600
+MESS     DC    CL90' '                                                  00022700
+         GTRU  GSRT                                                     00022800
+GEND     EQU   *                                                        00022900
+CCODE    EQU   *+18                                                     00023000
+PSW      EQU   *+42                                                     00023100
+CCODEM   DC    C'COMPLETION CODE:       '                               00023200
+ABMESS   DC    C'MONITOR ABENDED WITH DUMP'                             00023300
+QUITMESS DC    C'MONITOR TERMINATED     '                               00023400
+PROGMESS DC    C'ENTER PROGRAM NAME:  ',X'002A40'                       00023500
+EPNAME   DC    CL8' ',X'2A4415',C'PARAMETERS:  ',X'2A40'                00023600
+PARM     DC    CL40' '                                                  00023700
+GACB     SAEC  PFKMSK=(0-2),ATTNTYP=NULL,COMAREA=COMAREA,              X00023800
+               EP=ATTNROUT,RESTART=YES,DCB=SCOPE                        00023900
+SCOPE    DCB   DDNAME=SCOPE,GTYPE=BASIC,MACRF=(RC,WC),GNCP=10,DSORG=GS  00024000
+DDCB     DCB   DDNAME=LOADMODS,MACRF=(E),DSORG=PO,DEVD=DA,EXLST=EXLST   00024100
+JFCB     DS    XL176                                                    00024200
+UCC      DC    CL5'U    '                                               00024300
+SCC      DC    CL5'S    '                                               00024400
+TRTAB    EQU   *-C'0'                                                   00024500
+         DC    C'0123456789ABCDEF'                                      00024600
+ALL      DC    H'4096'             AMOUNT OF SCOPE BUFFER               00024700
+BFRSRT   DC    H'0'                                                     00024800
+NAMEINA  DC    AL2(EPNAME-PROGMESS+MESS-GSRT)                           00024900
+NAMEINB  DC    AL2(DSNAM+6-GSRT)                                        00025000
+WAITWORD DC    F'0'                                                     00025100
+LINKAD   DC    F'0'                                                     00025200
+COMAREA  DC    4F'0'                                                    00025300
+SAVE14   DC    F'0'                                                     00025400
+BCE      DC    F'0'                                                     00025500
+OTT      DC    X'60000000'                                              00025600
+ZERO     DC    F'0'                                                     00025700
+EXLST    DC    X'87',AL3(JFCB)                                          00025800
+WORK     DS    D                                                        00025900
+         LTORG                                                          00026000
+         END   CRAZYMON                                                 00026100

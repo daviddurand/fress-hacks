@@ -1,0 +1,260 @@
+:READ  GETITEM  ASSEMBLE C1 WORK    3/26/19  21:59
+*********************************************************************** 00000100
+*                                                                       00000200
+*        &SIZE                 THE LENTH OF IDTABLE IN WORDS            00000300
+*                                                                       00000400
+*********************************************************************** 00000500
+         LCLA  &SIZE                                                    00000600
+&SIZE    SETA  99                                                       00000700
+         SPACE 5                                                        00000800
+GETITEM  ENTER                                                          00000900
+         LR    9,1             SAVE ADDRESS OF PARAMETER LIST           00001000
+         NI    7(9),X'FE'      MAKE SURE HAVE ORDERS NAME               00001100
+         L     6,=A(IDTABLE)   R6 POINTS (EVENTUALLY) TO WHERE ID       00001200
+*                              BEING RETRIEVED WILL GO IN TABLE         00001300
+         SPACE 3                                                        00001400
+         L     10,=A(TABPNT)   EXPLAINED ON SWAPOUT LISTING             00001500
+         CLI   0(6),X'FF'      CHECK TO SEE IF TABLE COMPLETELY EMPTY   00001600
+         BE    NEWAEMPT        BRANCH IF IT IS                          00001700
+FINDLOOP CLC   0(4,6),4(9)     TABLE ENTRY VS ONE BEING RETRIEVED       00001800
+         BE    FOUND                                                    00001900
+         TM    4(6),X'80'      CHECK END OF TABLE FLAG                  00002000
+         BO    NEWGUY          IF SET, THEN ITEM BEING RETRIEVED IS     00002100
+*                              NOT IN THE TABLE( I.E. IS NOT IN CORE)   00002200
+         LA    6,12(6)                                                  00002300
+         B     FINDLOOP                                                 00002400
+         SPACE 3                                                        00002500
+NEWGUY   C     6,=A(IDTABLE+4*(&SIZE-3))                                00002600
+         BE    STORTOP         IF NO SPACE IN TABLE, STORE TOP ENTRY    00002700
+         NI    4(6),X'3F'          CLEAR END OF TABLE FLAG & HOLD       00002800
+*                                      FLAG (SET BY STORTOP)            00002900
+         LA    6,12(6)         R6 POINTS TO WHERE THE NEW ITEM GOES     00003000
+         EJECT                                                          00003100
+NEWAEMPT MVI   4(6),X'80'               SET NEW EMD OF TABLE FLAG       00003200
+         L     2,4(9)          ITEM NAME BEING RETRIEVED                00003300
+         ST    2,0(6)          PUT NAME IN IDTABLE                      00003400
+         SR    3,3                ZERO DATA ADDR FIELD TO SAY PAGE NOT  00003500
+         ST    3,8(6)             SINCE THIS NEW ENTRY, DATA PAGE NOT   00003600
+*        THIS WILL PREVENT SWAPOUT FROM TRYING TO STORE THE DATA PAGE   00003700
+         SPACE 3                                                        00003800
+FOUND    LH    2,8(9)          GET REQUESTEDC ORDERS INCREMENT          00003900
+         ST    2,PASSAREA+12   PUT IT IN PARAMETRE LIST GOING TO MAINTA 00004000
+         L     3,4(9)          NAME OF PAGE BEING RETRIEVED             00004100
+         ST    3,PASSAREA      PUT PAGE NAMR IN PARAM LIST              00004200
+         LA    1,PASSAREA      ADDRESS OF PARAM LIST                    00004300
+         OI    4(6),X'40'               HOLD THIS PAGE IN CORE          00004400
+         ST    6,0(10)         SET TABPNT TO POINT AT THE POSITION IN   00004500
+*                              IDTABLE OF THE PAGE CURRENTLY BEING      00004600
+*                              RETRIEVED                                00004700
+         L     15,=V(MAINTAIN)                                          00004800
+         BALR  14,15           RETRIEVE ORDERS                          00004900
+         SPACE 3                                                        00005000
+         L     6,0(10)         RE-LOAD POINTER INTO TABLE               00005100
+         L     4,PASSAREA+8    ADDRESS OF ORDERS ID                     00005200
+         ST    4,12(9)         PASS ADDRESS BACK TO CALLER              00005300
+         IC    0,4(6)          SAVE HIGH BIT                            00005400
+         ST    4,4(6)          PUT ORDERS ADDRESS (NEW) IN TABLE        00005500
+         STC   0,4(6)          RESTORE HIGH ORDER BYTE                  00005600
+         SPACE 3                                                        00005700
+         LH    5,10(9)         REQUESTED DATA INCREMENT                 00005800
+         ST    5,PASSAREA+12   PASS ON THE INCREMENT                    00005900
+         OI    PASSAREA+3,X'01'  GET DATA ITEM NAME                     00006000
+         L     15,=V(MAINTAIN)                                          00006100
+         BALR  14,15           RETRIEVE DATA ITEM                       00006200
+         SPACE 3                                                        00006300
+         L     6,0(10)         RE-LOAD POINTER INTO TABLE               00006400
+         L     7,PASSAREA+8    ADDRESS OF DATA ITEM                     00006500
+         ST    7,16(9)         PASS DATA ADD BACK TO CALLER             00006600
+         ST    7,8(6)          PUT DATA ADDRESS IN IDTABLE              00006700
+         XI    4(6),X'40'               CLEAR HOLD FLAG                 00006800
+         L     13,4(13)        GET HSA ADDRESS                          00006900
+         RETURN (14,12)                                                 00007000
+         EJECT                                                          00007100
+*        IF THE ITEM BEING RETRIEVED IS NOT IN CORE AND IDTABLE IS FULL 00007200
+*        CONTROL COMES HERE.  THE LENTHS OF ORDERS AND DATA OF THE FIRS 00007300
+*        ENTRY IN IDTABLE ARE GOTTEN AND SWPAOUT IS CALLED TO PASS THES 00007400
+*        TWO PAGES OUT OF CORE AND MOVE UP THE TABLE                    00007500
+STORTOP  L     5,=A(IDTABLE)   ADDRESS OF TOP OF TABLE                  00007600
+         L     3,4(5)          ADDRESS OF ORDERS ITEM                   00007700
+         L     4,4(3)          LENTH OF ORDERS ITEM                     00007800
+         L     3,8(5)          ADDRESS OF DATA ITEM                     00007900
+         A     4,4(3)          R4 NOW HAS TOTAL LENTH OF FIRST ITEM     00008000
+         OI    4(6),X'40'      HOLD THIS PAGE(SO AS TO GET POINTER TO   00008100
+*                                  IT RETURNED FROM SWAPOUT             00008200
+*                                                                       00008300
+*        WHEN CALLING SWAPOUT, R4 CONTAINS THE LENTH (IN BTYES)         00008400
+*        TO BE FREED                                                    00008500
+*                                                                       00008600
+         L     15,=V(SWAPOUT)                                           00008700
+         BALR  14,15                                                    00008800
+         L     6,0(10)        RE-LOAD POINTER TO LAST PAGE IN CORE      00008900
+         B     NEWGUY+8        PUT GUY BEING RETRIEVED IN TABLE         00009000
+PASSAREA DC    F'0',X'4000',5H'0'                                       00009100
+         LTORG                                                          00009200
+         EJECT                                                          00009300
+**************************************                                  00009400
+*         DO NOT HOLD MORE THAN ONE PAGE AT A TIME OR THE POINTER       00009500
+*         RETURNED IN TABPNT WILL BE INCORRECT.  IT WILL POINT TO       00009600
+*         THE FIRST HELD PAGE THAT IS ENCOUNTERED( IF THAT PAGE IS PUT  00009700
+*         IN OPNTPAGE ).  OTHERWISE, IT WILL POINT TO THE LAST PAGE EN- 00009800
+*         COUNTERED IN THE TABLE MOVEUP                                 00009900
+*****                                                                   00010000
+*        IF THERE IS ONLY ONE PAGE IN CORE, AND IT IS HELD, ONLY THE    00010100
+*        DATA FOR THAT PAGE IS STORED.  THIS SHOULD CLEAR ENOUGH SPACE  00010200
+         SPACE 3                                                        00010300
+*********************************************************************** 00010400
+*                                                                       00010500
+*        IF THE HIGH ORDER BIT OF REG 4 IS SET, AND THERE IS ONLY ONE   00010600
+*        PAIR OF PAGES IN CORE, THEN THOSE PAGES ARE STORED AND A RETUR 00010700
+*        TO THE SUPER IS EFFECTED(BY POSTING THE WAITWORD)              00010800
+*        THIS ID DONE ONLY WHEN THERE IS NOT ENOUGH SPACE IN THE FAQ    00010900
+*        TO ALLOW THE SYSTEM TO GETMAIN                                 00011000
+*        THE SET BIT MEANS THAT MAINTAIN IS SEARCHING FOR A BLOCK OF    00011100
+*        2000 BYTES IN THE FAQ AND CANNOT FIND IT                       00011200
+*                                                                       00011300
+*********************************************************************** 00011400
+*                                                                       00011500
+*        THE PECULIAR METHOD OF SAVING THE CALLING PROGRAM'S REGISTER'S 00011600
+*        IS USED BECAUSE OF THE WAY THIS PROGRAM IS USED                00011700
+*        THE IMMEDIATE REASON IS THAT MAINTAIN IS NOT RE-ENTRANT        00011800
+*                                                                       00011900
+*        R4 ON ENTRY CONTAINS THE NUMBER OF BYTES TO PASS OUT OF CORE   00012000
+*                                                                       00012100
+*        R2 IS USED TO INDEX DOWN THE TABLE WHILE PUSHING PAGES OUT OF  00012200
+*              CORE                                                     00012300
+*        R8 CONTAINS THE NUMBER OF BYTES ALREADY PUSHED OUT OF CORE     00012400
+         SPACE 2                                                        00012500
+SWAPOUT  CSECT                                                          00012600
+         B     84(15)          BRANCH AROUND SAVEAREA                   00012700
+         DC    AL1(7),CL7'SWAPOUT'                                      00012800
+SWAPSAVE DC 18F'0'                                                      00012900
+         USING SWAPOUT,15                                               00013000
+         STM   0,15,SAVER              SAVE CALLER'S REG'S              00013100
+         LR    14,13                                                    00013200
+         LA    13,SWAPSAVE     SET UP BASE REGISTER                     00013300
+         ST    14,4(13)        CHAIN FORWARD                            00013400
+         ST    13,8(14)        CHAIN BACK                               00013500
+         USING SWAPSAVE,13                                              00013600
+         CLI   IDTABLE,X'FF'           CHECK TO SEE IF TABLE IS ALREADY 00013700
+         BE    BOMB             IF SO, TIME TO ABEND                    00013800
+         MVI   SETFLAG+1,X'FF'    WANT REGULAR EMPTY TABLE FLAG SET     00013900
+         LA    2,IDTABLE               R2 POINTS AT TOP OF TABLE        00014000
+         LA    1,PASSBLK       R1 POINTS TO PARAMETER LIST FOR MAINTAIN 00014100
+         MVI   SAVED,X'00'              INITIALIZE FLAG( WHETHER        00014200
+*                                       TO MOVE BACK IN A HELD PAGE)    00014300
+         CLI   IDTABLE+4,X'C0'    ONE PAGE AND IT IS HELD ?             00014400
+         BE    DATINCOR           SEE IF DATA IS IN CORE                00014500
+         SR    8,8           R8 CONTAINS LENTH ALREADY PASSED OUT       00014600
+         SPACE 3                                                        00014700
+NOBIT    ST    4,OPNTPAGE      SAVE SO CAN CHECK HIGH ORDER BIT LATER   00014800
+         LA    4,0(4)        CLEAR THAT BIT IF IT IS SET                00014900
+         SPACE 2                                                        00015000
+*        PASS OUT ORDERS ID IF IT IS IN CORE                            00015100
+PUSHOUT  L     3,0(2)                  GET PAGE NAME FROM TABLE         00015200
+         ST    3,PASSBLK       PUT NAME IN PARAMETER LIST               00015300
+*              NAME PUT IN TABLE BEFORE CHECKING HOLD BIT BECAUSE       00015400
+*        DATA MIGHT BE PASSED OUT EVEN IF IT IS HELD                    00015500
+         TM    4(2),X'40'              IS THIS A HELD PAGE ?            00015600
+         BO    HOLD                     YES, THEN BRANCH                00015700
+         L     9,4(2)          R9 POINTS TO ORDERS ID                   00015800
+         LH    5,6(9)             LENTH OF ORDERS PAGE IN R5            00015900
+         STH   5,PASSBLK+6     LENTH OF ORDERS TO STOTE                 00016000
+         L     15,=V(MAINTAIN)     THE 'STORER'                         00016100
+         BALR  14,15           STORE THE ORDERS                         00016200
+         AR    8,5             UPDATE THE LENTH PASSED OUT              00016300
+         EJECT                                                          00016400
+*                                                                       00016500
+*        PASS OUT DATA ID IF IT IS IN CORE                              00016600
+DATSTR   L     6,8(2)              ADDRESS OF DATA ITEM FROM TABLE      00016700
+         LH    7,6(6)             LENTH OF DATA PAGE IN R7              00016800
+         STH   7,PASSBLK+6     LENTH OF DATA TO STORE                   00016900
+         OI    PASSBLK+3,X'01'   GET DATA ITEM MAME                     00017000
+         L     15,=V(MAINTAIN)   THE GUY WHO PUTS IT OUT THERE          00017100
+         BALR  14,15                                                    00017200
+         AR    8,7             LENTH ALREADY STORED + LENTH JUST STORED 00017300
+         TM    4(2),X'80'               IS THIS THE LAST ENTRY IN TABLE 00017400
+         BO    EMPTY           IF IT IS, BRANCH                         00017500
+         SPACE 4                                                        00017600
+CHECK    LA    2,12(2)                  OTHERWISE,INCREMENT IDTABLE POI 00017700
+         CR    8,4     LENTH PASSED OUT VS SPACE NEEDED                 00017800
+         BL    PUSHOUT         IF MORE SPACE HAS TO BEV FREED,BRANCH    00017900
+         LA    9,IDTABLE       R9 NOW POINTS TO TOP OF TABLE            00018000
+MOVEUP   MVC   0(12,9),0(2)    MOVE TABLE ENTRIES IN CORE UP IN TABLE   00018100
+         TM    4(2),X'40'     IS THIS A HELD PAGE ?                     00018200
+         BZ    *+8       IF NOT, SKIP AROUND POINTERV STORING           00018300
+         ST    9,TABPNT     SAVE POINTER TO THE HELD PAGE               00018400
+         TM    4(2),X'80'      HAVE MOVED ALL OF TABLE?                 00018500
+         BO    CHKBACK                                                  00018600
+         LA    9,12(9)         INCREMENT ' TO ' POINTER                 00018700
+         LA    2,12(2)         INCREMENT ' FROM ' POINTER               00018800
+         B     MOVEUP          MOVE UP THE REST OF THE TABLE            00018900
+   SPACE 4                                                              00019000
+DATINCOR L     6,8(2)             ADDR OF DATA PAGE                     00019100
+         LTR   6,6                IF = 0, THEN PAGE NOT IN CORE         00019200
+         BE    BOMB               BOMB IF THIS THE CASE                 00019300
+         L     3,0(6)             GET PAGE NAME OFF TOP OF PAGRE        00019400
+         ST    3,PASSBLK          PUT IN PARAM LIST                     00019500
+         SR    7,7                 ZERO DATA ADDR SINCE PAGE NOW BEING  00019600
+         ST    7,8(2)             PUSHED OUT OF CORE                    00019700
+         MVI   SETFLAG+1,0        WHEN EMPTY TABLE FLAG SET, DON'T PUT  00019800
+*                            X'FF' IN TOP OF PAGE NAMRE                 00019900
+         B     DATSTR+4           GO STORE THE DATA PAGE AND THEN EXIT  00020000
+         EJECT                                                          00020100
+CHKBACK  CLI   SAVED,X'00'              HAVE TO RETURN HELD PABE ?      00020200
+         BE    RETURN                   IF NOT, BRANCH                  00020300
+         XI    4(9),X'80'               CLEAR END OF TABLE FLAG         00020400
+MOVER    MVC   12(12,9),OPNTPAGE   PUT HELD PAGE BACK                   00020500
+         OI    16(9),X'80'     TAG THIS AS LAST ENTRY                   00020600
+         LA    9,12(9)         R9 POINTS AT WHERE SAVED PAGE MOVED BACK 00020700
+         ST    9,TABPNT        THE WORD NOW POINTS AT SAVED PAGE        00020800
+RETURN   LM    0,15,SAVER                                               00020900
+         BR    14                                                       00021000
+         SPACE 4                                                        00021100
+EMPTY    CLI   SAVED,X'00'              HAVE TO RESTORE HELD PAGE ?     00021200
+         BE    SETFLAG                                                  00021300
+         LA    9,IDTABLE-12                                             00021400
+         B     MOVER                                                    00021500
+SETFLAG  MVI   IDTABLE,X'FF'            SAY TABLE IS EMPTY              00021600
+         B     RETURN                                                   00021700
+HOLD     TM    4(2),X'80'         IF THIS IS THE LAST PAGE IN THE TABLE 00021800
+         BO    MOVEUP-4      THEN OBVIOUSLY ITS DATA IS NOT IN CORE     00021900
+         MVI   SAVED,X'01'      OTHERWISE, SET FLAG TO MOVE THIS PAGE   00022000
+*                        BACK INTO TABLE WHEN FINISHED                  00022100
+         SR    15,15      GET A ZERO                                    00022200
+         A     15,OPNTPAGE      SET COND CODE IF HIGH ORDER BIT SET     00022300
+         MVC   OPNTPAGE(12),0(2)        SAVE PAGE ENTRY                 00022400
+         BL    CHECK-8     IF BIT SET, DON'T STORE THE DATA             00022500
+         B     DATSTR              GO STORE ONLY THE DATA               00022600
+         EJECT                                                          00022700
+SAVED    DS    X                                                        00022800
+BOMB     LA    1,4                USER COMPLETION CODE FOR ABEND        00022900
+         SVC   13                 ABEND                                 00023000
+TABPNT   DC    F'0'            USED BY GETITEM:  THIS WORD POINTS AT    00023100
+*                              THE PAGE BEING RETRIEVED .  SWAPOUT WILL 00023200
+*                              RE-SET THIS WORD SO THAT IT POINTS AT    00023300
+*                              THE PAGE BEING HELD(I.E. THE PAGE        00023400
+*                              GETITEM IS WORKING ON)                   00023500
+PASSBLK  DC    F'0',X'6000',3H'0'      PARAMETER AREA FOR MAINTAIN      00023600
+         LTORG                                                          00023700
+SAVER    DS    16F             USED TO SAVE CALLING PROG'S REG'S        00023800
+OPNTPAGE DS    3F                                                       00023900
+         SPACE 4                                                        00024000
+         ENTRY IDTABLE,TABPNT                                           00024100
+*        ************************************************************** 00024200
+*        IDTABLE CONTAINS THE NAMES AND ADDRESSES OF ALL THE USER PAGES 00024300
+*        IN CORE.  IT IS USED BY SWAPOUT AND GETITEM..                  00024400
+*                                                                       00024500
+*        EACH ENTRY IS AS FOLLOWS:                                      00024600
+*                                                                       00024700
+*              FIRST FOUR BYTES: THE ORDERS ID NAME                     00024800
+*              FIFTH BYTE:                                              00024900
+*                  BIT 0 ON = END OF TABLE                              00025000
+*                  BIT 1 ON = HOLD THIS PAGE IN CORE                    00025100
+*              NEXT THREE BYTES: ADDRESS OF THE ORDERS ID               00025200
+*              LAST FOUR BYTES: ADDRESS OF THE DATA ID                  00025300
+*                                                                       00025400
+*        EACH ENTRY IS TWELVE BYTES LONG                                00025500
+         DS    0F                                                       00025600
+IDTABLE  DC    X'FF'                                                    00025700
+         DS    (&SIZE-1)F                                               00025800
+         END                                                            00025900

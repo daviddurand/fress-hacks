@@ -1,0 +1,4 @@
+split -p ':READ' -a 2 punch.txt split
+foreach i ( split* )
+mv $i `head -1 $i|awk '{print tolower($2)}'`
+end

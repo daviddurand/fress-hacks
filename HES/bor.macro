@@ -1,0 +1,5 @@
+:READ  BOR      MACRO    A1 TEMP    3/27/19  18:24
+         MACRO
+&LAB     BOR   &LOC
+&LAB     BCR   1,&LOC
+         MEND

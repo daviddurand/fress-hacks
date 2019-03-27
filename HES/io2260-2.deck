@@ -1,0 +1,160 @@
+//   JOB                                                                DSER0000
+//   EXEC   ASSEMBLE                                                    DSER0010
+DSER     START 0                                                        DSER0020
+* DSER IS THE ERROR RECOVERY PHASE FOR IO2260. IT RESIDES IN ABSOLUTE   DSER0030
+* FORM IN SDSABS, AND IS FETCHED BY THE SYSTEM IN THE EVENT OF UNIT     DSER0040
+* CHECK. UPON ENTRY, THE GENERAL REGISTERS ARE AS FOLLOWS--             DSER0050
+*                                                                       DSER0060
+*       1) RG1  CONTAINS UCB ADDRESS                                    DSER0070
+*                                                                       DSER0080
+*       2) RG2  CONTAINS IOB ADDRESS                                    DSER0090
+*                                                                       DSER0100
+*       3) RG3  CONTAINS ADDRESS OF IO2260 ERROR FLAGS                  DSER0110
+*                                                                       DSER0120
+*       4) RG14 CONTAINS THE SYSTEM RETURN ADDRESS                      DSER0130
+*                                                                       DSER0140
+* AT EXIT, REGISTER 2 HAS BEEN CHANGED AND REGISTER 4 HAS THE BASE      DSER0150
+* ADDRESS. ALL OTHER REGISTERS ARE UNCHANGED.                           DSER0160
+*                                                                       DSER0170
+         BALR  BASE,0                  SET BASE                         DSER0180
+         USING *,BASE                  TELL ASSEMBLER                   DSER0190
+         ST    IOB,IOBADDR             STORE IOB ADDRESS                DSER0200
+         TM    16(IOB),X'40'           IS 1053 READY                    DSER0210
+         BC    8,READY                 BRANCH IF YES                    DSER0220
+         TM    RDYFLG,X'01'            HAS MESSAGE APPEARED ONCE        DSER0230
+         BC    1,PTRREQ                BRANCH IF YES                    DSER0240
+CNVRTADR SR    WORK,WORK               CLEAR REG                        DSER0250
+         IC    WORK,1(UCB)             GET HARDWARE ADDRESS             DSER0260
+         SRL   WORK,4                  CONVERT FIRST DIGIT TO EBCDIC    DSER0270
+         IC    WORK,TABLE(WORK)                                         DSER0280
+         STC   WORK,UNITBUF+1                                           DSER0290
+         IC    WORK,1(UCB)             GET NEXT DIGIT FOR CONVERSION    DSER0300
+         SLL   WORK,28                 CONVERT IT                       DSER0310
+         SRL   WORK,28                                                  DSER0320
+         IC    WORK,TABLE(WORK)                                         DSER0330
+         STC   WORK,UNITBUF+2                                           DSER0340
+         IC    WORK,0(UCB)                                              DSER0350
+         IC    WORK,TABLE(WORK)        CONVERT LAST DIGIT               DSER0360
+         STC   WORK,UNITBUF                                             DSER0370
+         LA    WORK,RDYCCW             PRINT THE MESSAGE                DSER0380
+         ST    WORK,MSGADDR                                             DSER0390
+         LA    WORK,14                                                  DSER0400
+         ST    WORK,UNITADDR                                            DSER0410
+         BAL   LINK,SIO                                                 DSER0420
+         BC    15,PTROUT               RETURN TO USER                   DSER0430
+         OI    RDYFLG,X'01'            SET TO SHOW MESSAGE WRITTEN      DSER0440
+         BC    15,PTRREQ               NORMAL RETURN                    DSER0450
+READY    CLI   3(UCB),X'10'            IS UNIT 1053                     DSER0460
+         BC    7,DISPLAY               BRANCH IF NOT                    DSER0470
+E1053R   CLI   31(UCB),X'05'           HAS ERROR OCCURED 5 TIMES        DSER0480
+         BC    13,AGAIN                BRANCH IF NOT                    DSER0490
+PTROUT   LA    CODE,0                  SET FOR SYSTEM RETURN            DSER0500
+         ST    CODE,28(UCB)            CLEAR ERROR COUNT                DSER0510
+         OI    2(FLAGS),X'01'          SET ERROR FLAG                   DSER0520
+         BCR   15,RETURN               RETURN TO SYSTEM                 DSER0530
+AGAIN    LA    WORK,1                                                   DSER0540
+         A     WORK,28(UCB)            UP ERROR COUNT                   DSER0550
+         ST    WORK,28(UCB)                                             DSER0560
+         LA    WORK,PTRERR                                              DSER0570
+         ST    WORK,MSGADDR            SET UP MESSAGE                   DSER0580
+         LH    WORK,0(UCB)                                              DSER0590
+         STH   WORK,UNITADDR                                            DSER0600
+         BAL   LINK,SIO                                                 DSER0610
+         BC    15,PTROUT                                                DSER0620
+PTRREQ   LA    CODE,0                  REQUEST IO FROM SYSTEM           DSER0630
+         L     WORK,IOBADDR                                             DSER0640
+         ST    CODE,16(WORK)                                            DSER0650
+         LA    CODE,8                                                   DSER0660
+         BCR   15,RETURN                                                DSER0670
+DISPLAY  L     WORK,IOBADDR                                             DSER0680
+         L     WORK,8(WORK)                                             DSER0690
+         S     WORK,=F'8'              FIND CCW ADDRESS                 DSER0700
+         CLI   0(WORK),X'02'           WAS ERROR ON READ MI             DSER0710
+         BC    7,WRTERROR                                               DSER0720
+RDEERROR OI    0(FLAGS),X'01'          SET READ ERROR FLAG              DSER0730
+         LA    WORK,RDEERR                                              DSER0740
+DERROR   ST    WORK,MSGADDR                                             DSER0750
+         LH    WORK,0(UCB)             SET UP FOR MESSAGE               DSER0760
+         STH   WORK,UNITADDR                                            DSER0770
+         BAL   LINK,SIO                                                 DSER0780
+         BC    15,*+4                                                   DSER0790
+         LA    CODE,0                                                   DSER0800
+         BCR   15,RETURN                                                DSER0810
+WRTERROR OI    1(FLAGS),X'01'                                           DSER0820
+         LA    WORK,WRTERR                                              DSER0830
+         BC    15,DERROR               DISPLAY ERRORS                   DSER0840
+SIO      L     WORK,72                                                  DSER0850
+         ST    WORK,SAVCAW                                              DSER0860
+         L     WORK,64                                                  DSER0870
+         ST    WORK,SAVCSW                                              DSER0880
+         L     WORK,68                                                  DSER0890
+         ST    WORK,SAVCSW+4                                            DSER0900
+         L     WORK,MSGADDR                                             DSER0910
+         STH   WORK,74                                                  DSER0920
+         SRL   WORK,16                                                  DSER0930
+         STC   WORK,73                                                  DSER0940
+         LH    WORK,UNITADDR                                            DSER0950
+START    SIO   0(WORK)                 ROUTINE STARTS IO HERE           DSER0960
+         BC    2,START                                                  DSER0970
+         BCR   5,LINK                                                   DSER0980
+TIO      TIO   0(WORK)                                                  DSER0990
+         BC    8,RESTORE                                                DSER1000
+         BC    15,TIO                                                   DSER1010
+RESTORE  L     WORK,SAVCAW                                              DSER1020
+         ST    WORK,72                                                  DSER1030
+         L     WORK,SAVCSW                                              DSER1040
+         ST    WORK,64                                                  DSER1050
+         L     WORK,SAVCSW+4                                            DSER1060
+         ST    WORK,68                                                  DSER1070
+         BC    15,4(LINK)                                               DSER1080
+UCB      EQU   1                                                        DSER1090
+IOB      EQU   2                                                        DSER1100
+WORK     EQU   2                                                        DSER1110
+FLAGS    EQU   3                                                        DSER1120
+BASE     EQU   4                                                        DSER1130
+LINK     EQU   15                                                       DSER1140
+CODE     EQU   15                                                       DSER1150
+RETURN   EQU   14                                                       DSER1160
+SAVCAW   DC    F'0'                                                     DSER1170
+SAVCSW   DC    2F'0'                                                    DSER1180
+IOBADDR  DC    F'0'                                                     DSER1190
+MSGADDR  DC    F'0'                                                     DSER1200
+UNITADDR DC    H'0'                                                     DSER1210
+RDYFLG   DC    X'00'                                                    DSER1220
+TABLE    DC    C'0123456789ABCDEF'                                      DSER1230
+RDYMSG   DC    C'READY UNIT '                                           DSER1240
+UNITBUF  DC    C'    '                                                  DSER1250
+PTRMSG   DC    CL20'WRITE ERROR---RETRY'                                DSER1260
+WRTMSG   DC    CL40'PER. ERR. ON WRT OR RDE FULL BUF COMND'             DSER1270
+RDEMSG   DC    CL30'PERMANENT ERROR ON READ MI'                         DSER1280
+PTRERR   DS    0D                                                       DSER1290
+         DC    X'01'                                                    DSER1300
+         DC    AL3(PTRMSG)                                              DSER1310
+         DC    X'2000'                                                  DSER1320
+         DC    H'20'                                                    DSER1330
+RDYCCW   DC    X'09'                                                    DSER1340
+         DC    AL3(RDYMSG)                                              DSER1350
+         DC    X'2000'                                                  DSER1360
+         DC    H'15'                                                    DSER1370
+WRTERR   DC    X'07'                                                    DSER1380
+         DC    FL3'0'                                                   DSER1390
+         DC    X'6000'                                                  DSER1400
+         DC    H'1'                                                     DSER1410
+         DC    X'01'                                                    DSER1420
+         DC    AL3(WRTMSG)                                              DSER1430
+         DC    X'2000'                                                  DSER1440
+         DC    H'40'                                                    DSER1450
+RDEERR   DC    X'07'                                                    DSER1460
+         DC    FL3'0'                                                   DSER1470
+         DC    X'6000'                                                  DSER1480
+         DC    H'1'                                                     DSER1490
+         DC    X'01'                                                    DSER1500
+         DC    AL3(RDYMSG)                                              DSER1510
+         DC    X'2000'                                                  DSER1520
+         DC    H'30'                                                    DSER1530
+         END   DSER                                                     DSER1540
+/*                                                                      DSER1550
+/&                                                                      DSER1560
+/&                                                                      CNSL3830
+STOP SUPER44                                                                    
+                                                                                

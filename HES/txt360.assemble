@@ -1,0 +1,1454 @@
+:READ  TXT360   ASSEMBLE C1 WORK    3/26/19  22:00
+         TITLE 'INITIALIZATION FOR TEXT360-HYPERTXT INTERFACE (D.RICE)' 00000100
+TXT360   ENTER                                                          00000200
+         ENTRY TXT360BM                                                 00000300
+         ENTRY EXLST                                                    00000400
+         ENTRY PRNTFLAG                                                 00000500
+         EXTRN GACB,OUTDCB,DISPLAY                                      00000600
+         EXTRN GDCB                                                     00000700
+         LA    12,TXT360+4096          SET UP 2ND BASE REGISTER         00000800
+         USING TXT360+4096,12                                           00000900
+         USING GDCB,11                                                  00001000
+         L     11,=V(GDCB)                                              00001100
+         LA    2,COMAREA1              ST                               00001200
+         ST    2,0(1)                  STORE MY COMAREA ADDR IN GACB    00001300
+         LA    2,ATTENRT                                                00001400
+         ST    2,16(1)                                                  00001500
+         NOP   ONLYONCE     RELOCATE ONLY THE 1ST TIME CALLED           00001600
+         MVI   *-3,X'F0'        MAKE NOP A BRANCH                       00001700
+         L     4,=V(START)         GET START ADDR OF BUFFER             00001800
+         MVC   STARTADD(2),0(4)    MOVE IT TO MY PROGRAM                00001900
+         MVC   ALTGTRU+2(2),0(4)   RELOCATE ALTER MESS. GTRU            00002000
+         MVC   PNTGTRU+2(2),0(4)     RELOCATE PRINT MESS GTRU           00002100
+         LH    5,CURSADD               GET ADDR TO INSERT CURSOR        00002200
+         AH    5,16(11)                ADD START OF SCOPE BUFFER        00002300
+         STH   5,CURSADD               RESTORE CORRECT ADDRESS          00002400
+         LH    5,G1+2              RELOCATE MAIN GTRU                   00002500
+         AH    5,16(11)                                                 00002600
+         STH   5,G1+2                                                   00002700
+ONLYONCE L     15,=V(BEGIN)                                             00002800
+         BALR  14,15                                                    00002900
+         MVI   NOOP+1,X'F0'                                             00003000
+         L     9,=V(OTYPE)                                              00003100
+         B     PARCAP                                                   00003200
+         TITLE 'ROUTINES TO DISPLAY ON SCOPE--TXT360-HYPRTXT INTERFACE' 00003300
+REDISPLY L     15,=V(BEGIN)        BEGIN SETS UP MAIN DISPLAY           00003400
+         BALR  14,15                                                    00003500
+GETSET   L     1,=V(GACB)                                               00003600
+         MVC   8(4,1),ALLKEYS          ENABLE ALL FUNKYS                00003700
+         MVI   15(1),10        ENABLE CANCEL & LP (FOR GAS PEDAL)       00003800
+         L     5,=V(BUFFER)        GET ADDR OF MENU AREA                00003900
+         MVC   0(54,5),M0          MOVE IN INITIAL COMMAND MESS         00004000
+         MVC   54(4,5),G1          MOVE IN GTRU                         00004100
+         BAL   1,WRBUFF                WRITE OUT THE BUFFER             00004200
+NOOP     NOP   TOSUPER                 DON'T GO TO SUPER 1ST TIME       00004300
+         STM   0,15,MYSAVE             SAVE MY REGS                     00004400
+         MVI   NOOP+1,X'F0'            BUT GO EVERY OTHER TIME          00004500
+         TITLE 'WAIT ROUTINE FOR TEXT360-HYPERTEXT INTERFACE'           00004600
+WAITHERE MVI   WAITWORD,0          CLEAR MAINLINE WAIT WORD             00004700
+         WAITR ECB=WAITWORD        ***MAINLINE WAIT***                  00004800
+         MVI   NOOP+1,0            DON'T GO BACK TO SUPER NEXT TIME     00004900
+         MVI   ATTNFLAG,1          SET FLAG SAYING NOT IN ATTENTION     00005000
+*********************************************************************** 00005100
+*        WAITWORD= 69 MEANS RETURN TO "NORMAL"                        * 00005200
+*                  50 MEANS PRINT OUT TEXT                            * 00005300
+*                  00 MEANS GO TO SCROLLER                            * 00005400
+*********************************************************************** 00005500
+         CLI   WAITWORD+3,50       IS PRINTER TO BE CALLED              00005600
+         BE    CALLPRNT            YES, GO CALL IT                      00005700
+         CLI   WAITWORD+3,69       IS THIS RETURN TO NORMAL             00005800
+         BE    CLOSEUP             YES, GO RETURN                       00005900
+         CLOSE (GDCB)              CLOSE GDCB                           00006000
+         L     1,=V(PSW)           GET ADDR OF PSW AND REGS IN R1       00006100
+         L     15,=V(SCROLLER)     GO CALL SCROLLER                     00006200
+         LTR   15,15           TEST IF SCROLLER IS HERE                 00006300
+         BE    *+6             IF IT ISN'T THEN DON'T GO THERE          00006400
+         BALR  14,15                                                    00006500
+         OPEN  (GDCB)              REOPEN GDCB                          00006600
+         ASGNBFR GDCB,BUFFLEN      REASSIGN BUFFER                      00006700
+RESPAR   LA    1,ARPARM                LOAD PARAMETER ADDR LIST         00006800
+         SVC   73                      LINK TO SPAR ROUTINE             00006900
+         B     GETSET              GET DISPLAY BACK UP                  00007000
+         SPACE 3                                                        00007100
+TOSUPER  NOP   TOSOUP                                                   00007200
+         MVI   TOSUPER+1,X'F0'                                          00007300
+         LA    1,ARPARM                LOAD PARAMETER ADDR LIST         00007400
+         SVC   73                      LINK TO SPAR ROUTINE             00007500
+         MVC   ALLKEYS,=X'FFFFFFFF'    ENABLE ALL KEYS                  00007600
+         MVI   ATTNTYP1+5,10           CHANGE TO ENABLE LP AND CANCEL   00007700
+         L     15,=V(GACB)         GET ADDR OF ATTENTION BLOCK          00007800
+         MVI   15(15),10           ENABLE LP AND CANCEL                 00007900
+         MVC   8(4,15),ALLKEYS     ENABLE ALL KEYS                      00008000
+         STM   0,15,MYSAVE                                              00008100
+         B     WAITHERE                                                 00008200
+TOSOUP   STM   0,15,MYSAVE                                              00008300
+         L     13,HYSAVE               LOAD SUPER'S SAVEAREA            00008400
+         LM    14,12,12(13)            LOAD SUPER'S REGS                00008500
+         BR    14                      RETURN TO SUPER                  00008600
+ARPARM   DC    F'2'                                                     00008700
+         DC    A(GACB)                                                  00008800
+         SPACE 3                                                        00008900
+WRBUFF   ST    1,SAVER1                SAVE R1 CAUSE GETS CLOBBERED     00009000
+         L     5,=V(BUFFERA)           AREA ADDR FOR MESSAGES           00009100
+         LA    6,250                   LENGTH                           00009200
+         L     7,=V(MESSADD)           BUFFER ADDR                      00009300
+         BAL   8,WRITER            WRITE                                00009400
+         L     8,SAVER1            LOAD RETURN                          00009500
+         B     STARTER             START DISPLAY AND RETURN             00009600
+SAVER1   DS    F                                                        00009700
+         SPACE 3                                                        00009800
+PRINT    L     3,AM52                                                   00009900
+         L     4,ABLNK                                                  00010000
+         BAL   6,DECIDE                                                 00010100
+         B     QUICK              FOR QUICK PRINTOUT                    00010200
+ALLOCATE L     6,=V(NUMTRACK)      GET ADDR OF NO. OF TRACKS OF TEXT    00010300
+         LH    7,0(6)                                                   00010400
+*        FOR NOW WE WILL USE HALF THE DATA SET SIZE FOR THE             00010500
+*              SIZE OF THE PRINTFILE                                    00010600
+         SRL   7,1            THIS DOES THE JOB                         00010700
+         STH   7,LENGTH            SAVE FOR ALLOCATE                    00010800
+         L     2,AM26                                                   00010900
+TRYAGAIN L     3,AM27                                                   00011000
+         L     4,AM10                                                   00011100
+         LH    5,CURSADD                                                00011200
+         LA    5,52(5)             COMPUTE ACTUAL CURSOR ADDR           00011300
+         STH   5,CURSADDR          AND SAVE IT                          00011400
+         BAL   10,ATTNTYP2         GO LET GUY TYPE IN DS NAME           00011500
+         LH    5,CURSADD                                                00011600
+         LA    5,37(5)             COMPUTE WHERE TO BEGIN READ FROM     00011700
+         STH   5,CURSADDR                                               00011800
+         LA    5,DSNAME            AREA TO READ INTO                    00011900
+         LA    6,44                AMOUNT TO READ                       00012000
+         LA    7,CURSADDR          WHERE TO READ FROM                   00012100
+         MVI   IOTYPE,X'80'        80 FOR READ BUFFER                   00012200
+         BAL   8,WRITER+4          SO READ IT                           00012300
+         BAL   8,STARTER           RESTART DISPLAY                      00012400
+         LA    1,ALLOCPL           LOAD PARM LIST ADDR                  00012500
+         L     15,=V(ALLOCATE)         PROGRAM TO ALLOCATE A DATA SET   00012600
+         LTR   15,15               IS IT HERE?                          00012700
+         BE    GETSET              NO, DON'T CALL IT                    00012800
+         BALR  14,15               YES, GO THERE                        00012900
+         STM   15,0,SAVERC         SAVE RETURN CODES FROM ALLOCATE      00013000
+         B     *+4(15)             BRANCH ON RETURN CODE                00013100
+         B     POSTPRNT            0 OK                                 00013200
+         B     CANTNOW             BAD, NO DD CARD                      00013300
+         B     CANTNOW             OPEN DIDN'T WORK                     00013400
+         B     EXISTS              ALREADY EXIST                        00013500
+CANTNOW  L     5,=V(BUFFER)        MOVE IN BAD MESSAGE                  00013600
+         CLI   SAVERC+7,20     SEE IF OUT OF ROOM                       00013700
+         BNE   *+14        IF NOT, GIVE GENERAL I/O ERROR               00013800
+         MVC   0(34,5),NOROOM    OTHERWISE TELL HIM NO ROOM             00013900
+         B     *+10                                                     00014000
+         MVC   0(34,5),BADDY       IF GET BAD RET CODE, TELL HIM        00014100
+         MVC   34(4,5),G1          MOVE IN GTRU                         00014200
+         B     NOOP-4                                                   00014300
+EXISTS   L     2,AM36              GIVE HIM MESSAGE                     00014400
+         B     TRYAGAIN                                                 00014500
+PRNTFLAG DC    X'0'                                                     00014600
+         DC    C'RETURN CODES'                                          00014700
+SAVERC   DC    2F'0'                                                    00014800
+ALLOCPL  DC    A(DSNAME)                                                00014900
+EXLST    DC    X'87',AL3(DISPLAY+10)                                    00015000
+         DC    AL4(LENGTH)                                              00015100
+OUTDCBA  DC    AL4(OUTDCB)                                              00015200
+LENGTH   DC    H'0'                                                     00015300
+DSNAME   DC    CL44' '                                                  00015400
+BADDY    DC    C'UNABLE TO PRINT; CHECK OUT DD CARD'                    00015500
+NOROOM   DC    CL34'NO ROOM ON DISK; MAKE SOME SPACE'                   00015600
+POSTPRNT L     5,PMESSADD     AREA ADDRESS                              00015700
+         LA    6,300               LENGTH                               00015800
+         LA    7,STARTADD      BUFFER ADDRESS                           00015900
+         BAL   8,WRITER            WRITE OUT DISPLAY                    00016000
+         BAL   8,STARTER           RESTART DISPLAY                      00016100
+         LA    0,50                POST VALUE OF 50 FOR WAITWORD        00016200
+         B     POST                                                     00016300
+QUICK    OI    PRNTFLAG,X'10'                                           00016400
+         B     ALLOCATE                                                 00016500
+CALLPRNT L     15,=V(PRINTER)      CALL PRINT OUT ROUTINE               00016600
+         LTR   15,15              TEST IF PRINTER PRESENT               00016700
+         BE    GETSET                  IF NOT, DON'T TRY                00016800
+         L     1,=V(OPOINT)     SAVD POINT FOR RETURN FROM PRINTER      00016900
+        MVC   SAVEPT1(12),0(1)                                          00017000
+         LA    1,STRTPRNT              PASS START OF TEXT TO PRINTER    00017100
+         BALR  14,15                                                    00017200
+         MVI   IOTYPE,X'40'            40 RINGS BELL                    00017300
+         BAL   8,GENIO                 SO RING IT                       00017400
+        L     1,=V(OPOINT)     RESTORE POINT IN TEXT WHEN CALLED PRNTR  00017500
+         MVC   0(12,1),SAVEPT1     RESTORE DUPARTURE POINT              00017600
+        B     REDISPLY                                                  00017700
+STRTPRNT DC    F'2'                    START OF TEXT TO PASS            00017800
+         DC    2F'0'                                                    00017900
+         SPACE 3                                                        00018000
+RETURN   LA    0,69                    POST 69 FOR SCROLLER             00018100
+         B     POST                                                     00018200
+CLOSEUP MVI    TOSUPER+1,0            SET BRANCH TO NOOP                00018300
+         L     13,4(13)            GET READY                            00018400
+         RETURN (14,12)            BACK TO NORMAL (HA HA)               00018500
+         SPACE 2                                                        00018600
+SCRLLR   SR    0,0                                                      00018700
+POST     L     15,=V(GACB)             GET ADDR OF GACB                 00018800
+         SR    1,1                     DISABLE ALL FUNKYS               00018900
+         ST    1,8(15)                      IN GACB                     00019000
+         MVI   15(15),0                DISABLE ATTN TYPES               00019100
+         LA    1,WAITWORD              LOAD ADDR OF WAITWORD            00019200
+         SVC   2                       ISSUE POST SCV                   00019300
+         B     TOSUPER                 GET OUT OF ATTN ROUTINE          00019400
+         TITLE 'ATTENTION ROUTINES--TEXT360-HYPERTEXT INTERFACE'        00019500
+**********************************************************************  00019600
+***ATTENTION ROUTINE FOR ALL ATTENTIONS                                 00019700
+ATTENRT  STM   14,12,12(13)            REESTABLISH ADDRESSABILITY       00019800
+         USING ATTENRT,15                                               00019900
+         LR    14,13                                                    00020000
+         ST    14,HYSAVE               SAVE ADDR OF SUPER'S SAVEAREA    00020100
+         L     13,BASEREG                                               00020200
+         ST    13,8(14)                                                 00020300
+         DROP  15                                                       00020400
+         LM    0,15,MYSAVE             RESTORE MY REGS                  00020500
+         MVI   ATTNFLAG,0                                               00020600
+         CLI   BROWSE2,255     SEE IF 2ND BROWSE FLAG IS ON             00020700
+         BE    *+8             IF IT IS, DON'T SAVE RETURN              00020800
+         ST    10,SAVER10      IF IT'S NOT, SAVE THE RETURN             00020900
+         SR    15,15                   ZERO R15                         00021000
+         IC    15,COMAREA1+3           PUT TYPE OF INTERRUPT IN R15     00021100
+         SLL   15,2                    MULTIPLY BY 4                    00021200
+         L     15,ADDRTABL-4(15)       GET ADDRESS OF TYPE ROUTINE      00021300
+         BR    15                      AND BRANCH TO IT                 00021400
+BASEREG  DC    A(TXTSAV01)                                              00021500
+ADDRTABL DC    A(END,KEYBD,LP,0,CANCEL)                                 00021600
+         SPACE 3                                                        00021700
+CANCEL   MVI   LP+1,X'0A'      RESET NOOP                               00021800
+         MVI   BROWSE1,0       CLEAR OUT 1ST BROWSE FLAG                00021900
+         MVI   BROWSE2,0       AND 2ND ALSO                             00022000
+         B     REDISPLY        CANCEL KEY FORGETS CURRENT ACTION        00022100
+LP       NOP   4(10)               A BRANCH IF NO CHECK FOR IN TEXT     00022200
+         L     6,=V(COMAREA)           ADDRESS OF TEXTSCAN'S COMAREA    00022300
+        MVC   6(2,6),COMAREA1+6       PASS TO TEXTSCAN BUFFR ADDR OF    00022400
+         LR    1,6    MAKE SURE R1 NOT = 0 FOR TEXTSCAN                 00022500
+         L     15,=V(TEXTSCAN)     CHECK IF HIT IN TEXT           HIT   00022600
+         BALR  14,15                                                    00022700
+         B     *+4(15)                                                  00022800
+         B     BAD3                    NO, WAIT FOR NEW HIT             00022900
+         B     4(10)               RETURN WITH LP CODE                  00023000
+         B     OK1        HE GAS PEDALLED SO GO BACK TO RIGHT PLACE     00023100
+END      BR    10                  RETURN OF END KEY HIT                00023200
+         SPACE 2                                                        00023300
+**********************************************************************  00023400
+***SOME STORAGE AREAS AND CONSTANTS FOR ATTENRT                         00023500
+COMAREA1 DC    4F'0'                                                    00023600
+MYSAVE   DC    16F'0'                                                   00023700
+HYSAVE   DC    F'0'                                                     00023800
+WAITWORD DC    F'0'                                                     00023900
+SAVER10  DC    F'0'                                                     00024000
+BUFFLEN  DC    H'8192'                                                  00024100
+BROWSE1  DC    X'0'                                                     00024200
+BROWSE2  DC    X'0'                                                     00024300
+         EJECT                                                          00024400
+KEYBD    L     1,=X'80000000'      LOAD PFKMSK                          00024500
+         L     9,=V(OTYPE)         ADDR OF WHERE TO PASS TO MODIFY      00024600
+         MVI   LP+1,X'0A'          MAKE SURE CHECK FOR HIT IN TEXT      00024700
+         MVI   NOOPM1+1,0          PUT LP HIT BEFORE CHARACTER          00024800
+         SR    7,7                 PREVENT ADDR BOMB                    00024900
+         IC    7,COMAREA1+2        GET FNC. KEY NUMBER                  00025000
+         SRL   1,0(7)              SET PFKMSK TO CORRECT KEY            00025100
+         ST    1,LITEUP            SO TO LITE CORRECT KEY               00025200
+         SLL   7,2                 MULTIPLY KEY NO. BY 4                00025300
+         LA    6,LITEUP                ADDR OF FUNKY MASK               00025400
+         ST    6,DECB+12               STORE IN ADDR FIELD              00025500
+         MVI   IOTYPE,X'50'            50 FOR LITE FUNKYS               00025600
+         BAL   8,GENIO                 SO LITE THEM                     00025700
+         B     *+4(7)              GO TO CORRECT ROUTINE                00025800
+         B     CANCEL / MVT                                             00025900
+         B     BROPTION                                                 00026000
+         B     PRINT                                                    00026100
+         B     RETURN                                                   00026200
+         B     POPIT               KEY 10                               00026300
+         B     FLIPFLOP                                                 00026400
+         B     TABLE                                                    00026500
+         B     LINES                                                    00026600
+         B     ALTER                                                    00026700
+         B     INQUIRE                                                  00026800
+         B     GETLABEL                                                 00026900
+         B     SUPPLMNT                                                 00027000
+         B     SPECHARS                                                 00027100
+         B     TAB                                                      00027200
+         B     HEAD                                                     00027300
+         B     CENTER                                                   00027400
+         B     BRANCH                                                   00027500
+         B     KEEP                                                     00027600
+         B     ASIS                KEY 5                                00027700
+         B     SKIPLINE            KEY 15                               00027800
+         B     INDENT                                                   00027900
+         B     PARCAP                                                   00028000
+         B     BRANCH                                                   00028100
+         B     UNDRSCOR                                                 00028200
+         B     CAPCAP                                                   00028300
+         B     NEWCOL                                                   00028400
+         B     PARAGR                                                   00028500
+         B     CAP                                                      00028600
+         B     SCRLBP                                                   00028700
+         B     SCRLBL                                                   00028800
+         B     SCRLFP              KEY 30                               00028900
+         B     SCRLFL                                                   00029000
+LITEUP   DC    F'0'                                                     00029100
+         TITLE 'GRAPHIC I/O CONTROL ROUTINES--TXT360-HYPRTXT INTERFACE' 00029200
+DECB     DC    F'0'                    ECB                              00029300
+IOTYPE   DC    F'0'                    TYPE                             00029400
+         DC    A(GDCB)                 DCB ADDRESS                      00029500
+         DC    F'0'                    AREA ADDRESS                     00029600
+         DC    F'0'                    CSW REMNANTS                     00029700
+         DC    F'1'                    LENGTH                           00029800
+         DC    A(STARTADD)             BUFFER START ADDR                00029900
+         DC    A(CURSADDR)             CURSOR ADDR                      00030000
+         SPACE 1                                                        00030100
+WRITER   MVI   IOTYPE,X'A0'            A0 MEANS WRITE BUFFER            00030200
+         ST    5,DECB+12               STORE AREA ADDRESS               00030300
+         ST    6,DECB+20               STORE LENGTH                     00030400
+         ST    7,DECB+28               STORE BUFFER START ADDR          00030500
+GENIO    MVI   DECB,0                  CLEAR WAIT BIT                   00030600
+         LA    1,DECB                  LOAD DECB PARAMETER LIST         00030700
+         L     15,GDCB+48              GIOCR ADDR                       00030800
+         BALR  14,15                   BRANCH TO ENTRY POINT            00030900
+         LA    0,1                     COUNT OF 1                       00031000
+         SVC   1                       LINK TO WAIT ROUTINE             00031100
+         BR    8                       RETURN                           00031200
+STARTER  MVI   IOTYPE,X'6C'        6C FOR RESTART DISPLAY               00031300
+         B     GENIO                                                    00031400
+READCURS MVI   IOTYPE,X'88'            88 FOR READ TO CURSOR            00031500
+         B     WRITER+4                SAVE CORRECT STUFF               00031600
+INSERTC  MVI   IOTYPE,X'5A'            5A FOR INSERT CURSOR             00031700
+         LA    7,CURSADDR              LOAD ADDR OF WHERE TO PUT CURSOR 00031800
+         B     WRITER+12               SAVE IT AND INSERT CURSOR        00031900
+STARTADD DC    H'2990'                                                  00032000
+CURSADD  DC    H'0'                                                     00032100
+CURSADDR DC    H'0'                                                     00032200
+GETNUM   DC    10C' '                                                   00032300
+         EJECT                                                          00032400
+ATTNTYP1 L     15,=V(GACB)             GET BACB ADDR                    00032500
+         MVI   15(15),0                INITITALLY DISABLE ALL, BUT      00032600
+*                          LATER WILL ENABLE LP AND CANCEL HERE         00032700
+         MVC   8(4,15),ALLKEYS         ENABLE ALL FUNKYS                00032800
+*                   BUT 1ST TIME, ALLKEYS WILL BE ZERO UNTIL I WAIT     00032900
+         CLI   BROWSE1,255     IS 1ST BROWSE FLAG ON                    00033000
+         BNE   ARND+4          NO, DO NOTHING                           00033100
+         CLI   BROWSE2,255     IS 2ND ON ALSO                           00033200
+         BE    *+8             YES, DON'T DO ANYTHING                   00033300
+ARND     ST    10,SAVER10      OTHERWISE SAVE RETURN ADDRESS IF NEEDED  00033400
+INSTR    L     5,=V(BUFFER)            GET ADDR OF MENU AREA            00033500
+         LR    6,2                     R2 HAS 1ST LINE OF MESSAGE       00033600
+         SRL   6,24                    1ST BYTE HAS LENGTH OF MESSAGE   00033700
+         EX    6,MOVEL1                MOVE IN 1ST MESSAGE LINE         00033800
+         AR    5,6                     INCR BUFFER                      00033900
+         LA    5,1(5)                  INCR 1 FOR NEW LINE              00034000
+         LR    6,3                     R3 HAS 2ND MESSAGE LINE ADDR     00034100
+         SRL   6,24                    1ST BYTE IS LENGTH--AS BEFORE    00034200
+         EX    6,MOVEL2                MOVE IN 2ND LINE                 00034300
+         AR    5,6                     INCR BUFFER                      00034400
+         LA    5,1(5)                  INCR 1 FOR NEW LINE              00034500
+         LR    6,4                     R4 HAS 3RD MESSAGE LINE          00034600
+         SRL   6,24                    1ST BYTE IS LENGTH--ASBEFORE     00034700
+         EX    6,MOVEL3                MOVE IN 3RD LINE                 00034800
+         AR    5,6                     INCR BUFFER                      00034900
+         LA    5,1(5)                  HAVE TO ALLIGH GTRU ON HALF-WORD 00035000
+         SRL   5,1                                                      00035100
+         SLL   5,1                                                      00035200
+         MVC   0(4,5),G1               MOVE IN GTRU FOR START OF DISPLY 00035300
+         L     5,=V(BUFFERA)           AREA ADDR FOR MESSAGES           00035400
+         LA    6,250                   LENGTH                           00035500
+         L     7,=V(MESSADD)           BUFFER ADDR                      00035600
+         BAL   8,WRITER            WRITE IT OUT                         00035700
+         CLI   FLAG4,0                 IS THE INSERT CURSOR FLAG OFF    00035800
+         BE    *+12                    YES, GO AROUND                   00035900
+         BAL   8,INSERTC               INSERT THE CURSOR IF FLAG ON     00036000
+         MVI   FLAG4,0                 AND TURN OFF THE FLAG            00036100
+         BAL   8,STARTER           RESTART DISPLAY                      00036200
+         B     TOSUPER                                                  00036300
+MOVEL1   MVC   0(0,5),0(2)                                              00036400
+MOVEL2   MVC   0(0,5),0(3)                                              00036500
+MOVEL3   MVC   0(0,5),0(4)                                              00036600
+         GINIT                                                          00036700
+G1       GTRU  2990                                                     00036800
+         SPACE 2                                                        00036900
+ATTNTYP2 L     15,=V(GACB)             GET GACB ADDR                    00037000
+         MVI   15(15),9                ENABLE END AND CANCEL            00037100
+         MVI   FLAG4,1            TURN INSERT CURSOR FLAG ON            00037200
+         B     ATTNTYP3+8                                               00037300
+FLAG4    DC    H'0'                                                     00037400
+         SPACE 2                                                        00037500
+ATTNTYP3 L     15,=V(GACB)             GET GACB ADDR                    00037600
+         MVI   15(15),10               ENABLE LP AND CANCEL             00037700
+         MVC   8(4,15),ALLKEYS         ENABLE ALL FUNKYS                00037800
+         B     INSTR                                                    00037900
+ALLKEYS  DC    XL4'0'                  AFTER I 1ST WAIT THIS WILL BE    00038000
+*                        SET TO FFFFFFFF                                00038100
+         SPACE 1                                                        00038200
+**********************************************************************  00038300
+BAD3     L     2,AM3                   HIT NOT IN TEXT                  00038400
+         L     3,ABLNK                 MAKE 2ND LINE BLANK              00038500
+         L     4,ABLNK                 3RD ALSO                         00038600
+         B     INSTR               WRITE IT OUT                         00038700
+BAD4     L     2,AM4                   UNDEFINED LABEL                  00038800
+         B     BAD3+4                                                   00038900
+BAD6     L     2,AM5                   NOT LINK/BRANCH POINT            00039000
+         B     BAD3+4                                                   00039100
+         TITLE 'CONTROL ACTION ROUTINES--TEXT360-HYPERTEXT INTERFACE'   00039200
+GETLABEL L     15,=V(GETLABEL)     CALL ROUTINE TO RETRIEVE A LABEL     00039300
+         BALR  14,15                                                    00039400
+         L     5,=V(DISPLAY)       ADDR OF DESPLAY                      00039500
+         LR    6,1                 GETLABEL RETURNS LENGTH IN R1        00039600
+         L     7,=V(START)         ADDR OF START OF BUFFER              00039700
+         BAL   8,WRITER                                                 00039800
+         L     2,AM37              PROMPT                               00039900
+         L     3,ABLNK                                                  00040000
+         L     4,ABLNK                                                  00040100
+         MVI   LP+1,X'FA'          DON'T CHECK FOR HIT IN TEXT          00040200
+         CLI   BROWSE1,255         IS 1ST BROWSE FLAG ON                00040300
+         BNE   *+8                 NO, GO AROUND                        00040400
+         MVI   BROWSE2,255         TURN ON 2ND BROWSE FLAG              00040500
+         BAL   10,ATTNTYP3         WAIT FOR LP OR CANCEL                00040600
+         DC    4X'0'                                                    00040700
+         L     5,=V(COMAREA)                                            00040800
+         MVC   6(2,5),COMAREA1+6   PASS BUFFER ADDRESS OF LP HIT        00040900
+         L     15,=V(WHICHLAB)     FIND OUT WHICH LABEL HE CHOSE        00041000
+         BALR  14,15                                                    00041100
+         B     *+4(15)             RETURN CODE IN R15                   00041200
+         B     LINKIT              0 MEANS OK                           00041300
+         B     TOSUPER             4 MEANS NOT GOOD HIT                 00041400
+FLIPFLOP L     5,=V(FLAGWORD)                                           00041500
+         XI    0(5),X'10'    FLIPFLOP FLAG TO DISPLAY FORMAT SYMBOLS    00041600
+         B     REDISPLY                                                 00041700
+TRTAB    DC    X'40'                                                    00041800
+         DC    255AL1(*-TRTAB)                                          00041900
+         ORG   TRTAB+X'15'                                              00042000
+         DC    X'40'                                                    00042100
+         ORG                                                            00042200
+         SPACE 2                                                        00042300
+SCRLFL   LA    1,1      PASS 1 FOR SCROLL 1 LINE                        00042400
+         L     15,=V(SCROLLL)    GO SCROLL ONE LINE                     00042500
+         BALR  14,15                                                    00042600
+         B     OK1                                                      00042700
+SCRLFP   LA    1,37    PASS 37 LINES FOR SCROLL BY PAGE                 00042800
+         B     SCRLFL+4                                                 00042900
+SCRLBL   LA    1,1                 PASS 1 TO SCROLL BACK ROUTINE        00043000
+         L     15,=V(SCRLBACK)                                          00043100
+         B     SCRLFL+8     USE SAME ROUTINE TO SAVE SPACE              00043200
+SCRLBP   LA    1,37   PASS 37 LINES FOR BACK ONE PAGE                   00043300
+         B     SCRLBL+4                                                 00043400
+         SPACE 2                                                        00043500
+POPIT    L     15,=V(POP)          TO POP FROM BRANCH OR LINK           00043600
+         BALR  14,15                                                    00043700
+         B     OK                                                       00043800
+         SPACE 2                                                        00043900
+**********************************************************************  00044000
+*ROUTINES TO TAKE LINK OR BRANCH                                        00044100
+BRANCH   CLI   BROWSE1,255                                              00044200
+         BNE   *+8                                                      00044300
+         MVI   BROWSE2,255                                              00044400
+         L     2,AM6                   1ST LINE                         00044500
+         L     3,ABLNK                 2ND                              00044600
+         L     4,ABLNK                 3RD                              00044700
+         BAL   10,ATTNTYP1             GO WAIT FOR LP HIT OR CANCEL     00044800
+         B     GETSET             END KEY ENDS THIS FORMATTING          00044900
+         L     6,=V(TYPE)              GET ADDRESS OF HIT TYPE          00045000
+         CLI   3(6),2              IS IT BRANCH                         00045100
+         BE    LINKIT              YES, OK                              00045200
+         CLI   3(6),3              IF NOT LINK THEN BAD                 00045300
+         BNE   BAD6                                                     00045400
+LINKIT   L     15,=V(LINK1)            YES, GO TAKE LINK OR BRANCH      00045500
+         BALR  14,15                                                    00045600
+         B     *+4(15)                                                  00045700
+         B     OK                                                       00045800
+         B     BAD4               UNDEFINED LABEL                       00045900
+OK       L     15,=V(BEGIN)        CALL BEGIN TO RESET DISPLAY          00046000
+         BALR  14,15                                                    00046100
+         MVI   LP+1,X'0A'              RESET ROUTINE TO SET FOR TEXTHIT 00046200
+OK1      CLI   BROWSE1,255          IS 1ST BROWSE FLAG ON               00046300
+         MVI   BROWSE2,0          TURN OFF FLAG NOW THAT DONE           00046400
+         BNE   GETSET              NO, ALL DONE                         00046500
+         BAL   1,WRBUFF                                                 00046600
+         L     10,SAVER10          RELOAD OLD RETURN ADDRESS            00046700
+         LM    2,4,SAVER234        LOAD CORRECT MESSAGES                00046800
+         B     ATTNTYP1            REENABLE CORRECT STUFF               00046900
+         TITLE 'EDIT ACTION ROUTINES--TEXT360-HYPERTEXT INTERFACE'      00047000
+**********************************************************************  00047100
+*                                                                       00047200
+*        ROUTINE TO ADD ALTER FORMATS                                   00047300
+*              AT ONE POINT, MANY FORMATS MAY BE ENTERED                00047400
+*                                                                       00047500
+**********************************************************************  00047600
+ALTER    L     2,AM50                                                   00047700
+         L     3,ABLNK                                                  00047800
+         L     4,ABLNK                                                  00047900
+         STM   2,4,SAVER234        SAVE MESSAGES                        00048000
+         BAL   10,ATTNTYP1         GET LP HIT                           00048100
+         B     REDISPLY            IF END, REDISPLAY SCREEN             00048200
+         L     8,=V(POINT)                                              00048300
+         MVC   SAVEPT1(12),0(8)    SAVE HIT POINT                       00048400
+         LH    6,SAVEPT1+10        GET LENGTH INTO STRING               00048500
+         BCTR  6,0                 SUBTRACT ONE TO INSERT BEFORE        00048600
+         STH   6,SAVEPT1+10        SAVE ALTERED LENGTH                  00048700
+         MVC   4(12,9),SAVEPT1     MOVE HIT POINTER TO OPOINT1          00048800
+AGAIN    MVI   BLNKS,X'40'        MOVE IN 1 BLANK                       00048900
+         MVC   BLNKS+1(113),BLNKS   BLANK OUT AREA                      00049000
+         LA    5,BEGEDIT           ADDRESS OF EDIT MESSAGE              00049100
+         L     6,ALTERLEN          LENGTH OF MESSAGE                    00049200
+         LA    7,STARTADD                                               00049300
+         BAL   8,WRITER            WRITE OUT DIAPLAY                    00049400
+         BAL   8,STARTER           START DISPLAY                        00049500
+         MVI   LP+1,X'FA'          DON'T CHECK TEXT HIT                 00049600
+         L     15,=V(GACB)      GET GACB ADDR                           00049700
+         MVI   15(15),10               ENABLE LP AND CANCEL             00049800
+         MVC   8(4,15),=X'80000000'    ENABLE ONLY CANCEL               00049900
+         BAL   10,TOSUPER          WAIT FOR LP HIT OR CANCEL            00050000
+         DC    X'0',C'EEK'         BOMB IF SOMEHOW GOT END              00050100
+         LH    5,COMAREA1+10       GET Y POSITION OF HIT                00050200
+         C     5,=F'3680'          CHECK IF COICE                       00050300
+         BH    AGAIN               IF NOT, WAIT SOME MORE               00050400
+         S     5,=F'800'           CHECK OTHER END OF MESSAGE           00050500
+         BNH   AGAIN               IF NOT VALID, WAIT                   00050600
+         SR    4,4                 ZERO R4 FOR DIVIDE                   00050700
+         D     4,=F'80'            80 UNITS BETWEEN SCOPE LINES         00050800
+         SLL   5,2                 MULTIPLY BY 4 FOR INDEX              00050900
+         B     *+4(5)              GO FORTH                             00051000
+         B     FOOTNUM                                                  00051100
+         B     AGAIN                                                    00051200
+         B     RGHTHAND                                                 00051300
+         B     AGAIN                                                    00051400
+         B     PAGENO                                                   00051500
+         B     AGAIN                                                    00051600
+         B     SETTAB                                                   00051700
+         B     AGAIN                                                    00051800
+         B     OFOOT                                                    00051900
+         B     EFOOT                                                    00052000
+         B     DATE                                                     00052100
+         B     SUBTITLE                                                 00052200
+         B     TITLE                                                    00052300
+         B     AGAIN                                                    00052400
+         B     DOUBLE                                                   00052500
+         B     SINGLE                                                   00052600
+         B     AGAIN                                                    00052700
+         B     LEFTMAR                                                  00052800
+         B     RIGHTMAR                                                 00052900
+         B     AGAIN                                                    00053000
+         B     TWOCOL                                                   00053100
+         B     ONECOL                                                   00053200
+         B     AGAIN                                                    00053300
+         B     LINESPG                                                  00053400
+         B     AGAIN                                                    00053500
+         B     HYPHCLR                                                  00053600
+         B     HYPHALT                                                  00053700
+         B     NOHYPH                                                   00053800
+         B     HYPH                                                     00053900
+         B     AGAIN                                                    00054000
+         B     NOLINEJ                                                  00054100
+         B     LINEJ                                                    00054200
+         B     NOCOLJ                                                   00054300
+         B     COLJ                                                     00054400
+         B     AGAIN                                                    00054500
+         B     CANCEL                                                   00054600
+         SPACE 3                                                        00054700
+COLJ     MVI   27(9),X'24'         COLUMN JUSTIFICATION                 00054800
+TYPE10   LA    6,10                TYPE 10 FORMAT ORDER CODE            00054900
+COMMON   ST    6,0(9)              PASS OTYPE THE ORDER CODE            00055000
+         L     15,=V(MODIFY)       CALL MODIFY TO ADD IT TO DA          00055100
+         BALR  14,15                                                    00055200
+         B     AGAIN                                                    00055300
+NOCOLJ   MVI   27(9),X'2A'         NO COLUMN JUSTIFICATION              00055400
+         B     TYPE10                                                   00055500
+LINEJ    MVI   27(9),X'19'         LINE JUSTIFICATION                   00055600
+         B     TYPE10                                                   00055700
+NOLINEJ  MVI   27(9),X'21'         NO LINE JUSTIFICATION                00055800
+         B     TYPE10                                                   00055900
+HYPH     MVI   27(9),X'1F'         HYPHENATION ON                       00056000
+         B     TYPE10                                                   00056100
+NOHYPH   MVI   27(9),X'20'         NO HYPHENATION                       00056200
+         B     TYPE10                                                   00056300
+SINGLE   MVI   27(9),X'22'         SINGLE SPACE                         00056400
+         B     TYPE10                                                   00056500
+DOUBLE   MVI   27(9),X'1E'         DOUBLE SPACE                         00056600
+         B     TYPE10                                                   00056700
+RGHTHAND MVI   27(9),X'1A'         ALL RIGHT-HAND PAGES                 00056800
+         B     TYPE10                                                   00056900
+DATE     MVI   27(9),48           DATE ON EACH PAGE                     00057000
+         B     TYPE10                                                   00057100
+FOOTNUM  MVI   27(9),X'32'             AUTOMATIC FOOTNOTE NUMBERING     00057200
+         B     TYPE10                                                   00057300
+MOVE2    MVC   BLNKS(0),0(2)                                            00057400
+TWOCOL   MVI   27(9),X'27'         TWO COLUMNS PER PAGE                 00057500
+         L     2,AM29              MESSAGE                              00057600
+ALLGETNS LR    6,2                 IN TWO REGS TO PICK OFF LENGTH       00057700
+         SRL   6,24                LENGTH IN R6                         00057800
+         STH   6,ALTLEN                                                 00057900
+         EX    6,MOVE2             MOVE IN MESSAGE                      00058000
+         BAL   10,GETSTUFF         GET READY TO READ A NUMBER           00058100
+         BAL   5,GETNUMS           NUMBER BACK IN R5                    00058200
+         B     UGHNUM       FOR BAD NUMBER, RETURNS HERE                00058300
+         STC   5,26(9)             PASS IT TO MODIFY                    00058400
+         B     TYPE10              CALL MODIFY                          00058500
+UGHNUM   L     2,AM11       BAD NUMBER MESSAGE                          00058600
+         B     ALLGETNS                                                 00058700
+ONECOL   MVI   27(9),X'23'         ONE COLUMN PER PAGE                  00058800
+         B     TWOCOL+4                                                 00058900
+LEFTMAR  MVI   27(9),X'29'         SET LEFT MARGIN                      00059000
+         L     2,AM28                                                   00059100
+         B     ALLGETNS                                                 00059200
+RIGHTMAR MVI   27(9),X'28'         SET RIGHT MARGIN                     00059300
+         B     LEFTMAR+4                                                00059400
+LINESPG  MVI   27(9),X'26'         LINES PER PAGE                       00059500
+         L     2,AM45                                                   00059600
+         B     ALLGETNS                                                 00059700
+PAGENO   MVI   27(9),X'25'         NUMBER PAGES                         00059800
+         L     2,AM46                                                   00059900
+         B     ALLGETNS                                                 00060000
+ALTERLEN DC    A(ENDALTER-BEGEDIT)                                      00060100
+TITLE    MVI   27(9),1      TYPE FOR TITLE                              00060200
+         L     2,AM40     MESSAGE                                       00060300
+TOUGHY   LR    6,2       GET LENGTH, 1ST BYTE                           00060400
+         SRL   6,24                                                     00060500
+         STH   6,ALTLEN                                                 00060600
+         EX    6,MOVE2     MOVE IN MESSAGE                              00060700
+         BAL   10,GETSTUFF     INSERT CURSOR                            00060800
+         LA    5,BLNKS+45     ADDR TO READ INTO                         00060900
+         BAL   7,RDSTRNG           GO READ IN STRING OF CHARACTERS      00061000
+         LA    6,9                 ORDER TYPE 9                         00061100
+         B     COMMON                                                   00061200
+TRANS    TR    BLNKS+45(0),TRTAB                                        00061300
+SUBTITLE MVI   27(9),2            TYPE FOR SUBTITLE                     00061400
+         L     2,AM41                                                   00061500
+         B     TOUGHY                                                   00061600
+EFOOT    MVI   27(9),3            TYPE FOR EVEN FOOTNOTE                00061700
+         L     2,AM42                                                   00061800
+         B     TOUGHY                                                   00061900
+OFOOT    MVI   27(9),4            TYPE FOR ODD FOOTNOTE                 00062000
+         L     2,AM43                                                   00062100
+         B     TOUGHY                                                   00062200
+SETTAB   MVI   27(9),5            TYPE FOR SETTAB                       00062300
+         L     2,AM44                                                   00062400
+         B     TOUGHY                                                   00062500
+HYPHALT  MVI   27(9),6            TYPE FOR ADD WORDS TO HYPH DICT       00062600
+         L     2,AM48                                                   00062700
+         B     TOUGHY                                                   00062800
+HYPHCLR  MVI   27(9),7            TYPE FOR CLEAR OUT DICT AND ADD WRDS  00062900
+         B     HYPHALT+4                                                00063000
+         EJECT                                                          00063100
+*********************************************************************** 00063200
+*                                                                       00063300
+*      THESE ARE EDIT FORMATS:  ONE FORMAT ENTERED AT MANY POINTS       00063400
+*                                                                       00063500
+*        ****************************************************           00063600
+*                                                                       00063700
+*        THESE ARE SIMPLE FORMATS--REQUIRE ONLY ONE LP HIT            * 00063800
+*                                                                       00063900
+*********************************************************************** 00064000
+***      CHOOSES BEWEEN NEW PAGE AND NEW COLUMN                         00064100
+NEWCOL   L     3,AM35             2ND LINE--CHOICES                     00064200
+         L     4,ABLNK             3RD LINE BLANK                       00064300
+         BAL   6,DECIDE                DECIDE WHICH HE CHOSE            00064400
+         B     *+12                                                     00064500
+         LA    7,6                                                      00064600
+         B     *+8                                                      00064700
+         LA    7,17                                                     00064800
+BLNKADD  ST    7,24(9)                 STORE THE CODE FOR MODIFY        00064900
+         SR    2,2                 PREVENT ADDR BOMB                    00065000
+         IC    2,27(9)             GET FORMAT TYPE                      00065100
+         MH    2,=H'12'                                                 00065200
+         A     2,INQAADD           ADD TO BASE OF MESSAGES              00065300
+         L     3,AM2               1ST LINE                             00065400
+         L     4,ABLNK                 3RD LINE                         00065500
+GETHITS  LA    6,10                ORDER TYPE FOR SIMPLE FORMAT         00065600
+         ST    6,0(9)              STORE TYPE IN OTYPE                  00065700
+         STM   2,4,SAVER234            SAVE ORIGINAL MESSAGE INDEXES    00065800
+         MVI   BROWSE1,255     TURN ON 1ST BROWSE FLAG                  00065900
+LOOP1    BAL   10,ATTNTYP1         GO GET LP HIT                        00066000
+         B     REDISPLY           IF END KEY, ALL DONE                  00066100
+         BAL   1,LEGALHIT      CHECK FOR LEGAL HIT                      00066200
+         L     8,=V(POINT)         GET ADDR OF HIT POINTER              00066300
+NOOPM1   NOP   NOMIN1              A BRANCH IF FORMAT GOES AFTER        00066400
+         LH    7,10(8)            LOAD LENGTH INTO STRING OF HIT        00066500
+         BCTR  7,0                SUBTRACT 1                            00066600
+         STH   7,10(8)            STORE BACK ALTERED LENGTH             00066700
+NOMIN1   MVC   4(12,9),0(8)                                             00066800
+         L     15,=V(MODIFY)       GO ADD TO DATA STRUCTURE             00066900
+         BALR  14,15                                                    00067000
+         L     15,=V(BEGIN)                                             00067100
+         BALR  14,15                   CALL BEGIN TO RESET DISPLAY      00067200
+         LM    2,4,SAVER234            RELOAD ORIGINAL MESSAGE INDEXES  00067300
+         B     LOOP1               WAIT FOR ANOTHER LP OR END/CANCEL    00067400
+PARAGR   LA    7,7                     CODE FOR PARAGRAPH               00067500
+         B     BLNKADD             USE NEWPAGE ROUTINE                  00067600
+CAP      LA    7,1                     CODE FOR SINGLE CAP              00067700
+         B     BLNKADD                                                  00067800
+PARCAP   LA    7,27                PARAGRAPH AND SINGLE CAP             00067900
+         B     BLNKADD                                                  00068000
+CENTER   LA    7,9                     CODE FOR CENTER LINE             00068100
+         B     BLNKADD                                                  00068200
+ASIS     LA    7,10                    CODE FOR AS-IS TEXT              00068300
+         B     BLNKADD                                                  00068400
+SUPPLMNT LA    7,47       CODE FOR SUPPLEMENTAL LISTINGS                00068500
+         B     BLNKADD                                                  00068600
+SAVER234 DS    3F                      SAVEAREA FOR ORIGINAL MESS INDS  00068700
+         SPACE 3                                                        00068800
+***      ROUTINE TO DECIDE TYPE OF 'KEEP' DESIRED                     * 00068900
+KEEP     L     3,AM20             2ND--CHOICES                          00069000
+         L     4,AM21                  3RD--CHOICES                     00069100
+         BAL   6,DECIDE         GO FIND OUT WHICH CHOICE HE MADE        00069200
+         B     REGKEEP                                                  00069300
+         B     TWOCOLKP                                                 00069400
+         B     FLOAT                                                    00069500
+         LA    7,16            TYPE FOR END A KEEP                      00069600
+         MVI   NOOPM1+1,X'F0'      SET FLAG SO DON'T SUBTRACT 1FROM LEN 00069700
+         B     BLNKADD                 GET LP HITS                      00069800
+FLOAT    LA    7,18                    TYPE FOR FLOATING KEEP           00069900
+         B     BLNKADD                 GET LP HITS                      00070000
+TWOCOLKP LA    7,11                    TYPE FOR TWO/COLUMN KEEP         00070100
+         B     BLNKADD                 GET LP HITS                      00070200
+REGKEEP  LA    7,13                    TYPE FOR REGULAR KEEP            00070300
+         B     BLNKADD                 GET LP HITS                      00070400
+         EJECT                                                          00070500
+*********************************************************************** 00070600
+*                                                                       00070700
+*        THESE FORMATS REQUIRE 1 LP HIT AND A TYPED-IN NUMBER         * 00070800
+*                                                                       00070900
+*********************************************************************** 00071000
+SKIPLINE MVI   27(9),19                FORMAT TYPE FOR A SKIP           00071100
+         L     2,AM9                   1ST LINE                         00071200
+         L     4,ABLNK                 3RD LINE                         00071300
+GETN     MVI   NOOPRET+1,0             NOOP RETURN TO BROPTION          00071400
+         L     3,AM10                                                   00071500
+GETNUMB  LH    5,CURSADD          LOAD CURSOR ADDRESS                   00071600
+         LA    5,4(5)              INCR OVER GRAPHIC ORDERS             00071700
+*              (ACTUALLY FOUR LESS, SINCE I WANT TO BE AT END OF MESS.  00071800
+         LR    10,2                PICK OFF LENGTH OF MESSAGE           00071900
+         SRL   10,24               SHIFT OUT ADDRESS                    00072000
+         AR    5,10                ADD MESS LENG TO CURSOR ADDR         00072100
+         STH   5,CURSADDR         STORE ACTUAL ADDRESS FOR READCURS     00072200
+         BAL   10,ATTNTYP2        GO INSERT CURSOR & WAIT FOR END OR CN 00072300
+         BAL   5,GETNUMS           NUMBER BACK IN R5                    00072400
+         B     BADNUM          IF BAD NUMBER, TRY AGAIN                 00072500
+NOOPRET  NOP   OPTBACK                 IF BROPTION, ONLY NEED A NO.     00072600
+ENDNUM   STC   5,26(9)             STORE NUMBER FOR MODIFY              00072700
+         CLI   27(9),X'31'             IS THIS SPECIAL CHARS            00072800
+         BNE   BLNKADD+4               NO, GO GET LP HITS               00072900
+         CLI   26(9),24                IS NUMBER TOO BIG?               00073000
+         BH    BADCHAR                 NOT ON LIST                      00073100
+         CLI   26(9),0                 ZERO'S NO GOOD EITHER            00073200
+         BE    BADCHAR                                                  00073300
+         CLI   26(9),1                 CHECK FOR CHARA TO PRECEDE TEXT  00073400
+         BE    BLNKADD+4                                                00073500
+         CLI   26(9),4                                                  00073600
+         BE    BLNKADD+4                                                00073700
+         CLI   26(9),6                                                  00073800
+         BE    BLNKADD+4                                                00073900
+         CLI   26(9),18                                                 00074000
+         BE    BLNKADD+4                                                00074100
+         CLI   26(9),20                                                 00074200
+         BE    BLNKADD+4                                                00074300
+         MVI   NOOPM1+1,X'F0'          OTHERWISE DON'T SUB 1 FROM LP HI 00074400
+         B     BLNKADD+4                                                00074500
+BADNUM   L     2,AM11                  BAD NUMBER MESSAGE--LINE 1       00074600
+         B     GETN-4                                                   00074700
+BADCHAR  L     2,AM13                                                   00074800
+         B     GETN-4                  TRY AGAIN                        00074900
+         SPACE 2                                                        00075000
+HEAD     L     2,AM34                  MESSAGE FOR HEADINGS             00075100
+         MVI   27(9),X'16'      CODE FOR HEADINGS                       00075200
+         B     GETN-4                  GO GET A NUMBER                  00075300
+         SPACE 2                                                        00075400
+INDENT   L     3,AM7              2ND LINE--CHOICES                     00075500
+         L     4,ABLNK                                                  00075600
+         BAL   6,DECIDE         FIND OUT WHICH CHOICE HE MADE           00075700
+         B     REGULAR                                                  00075800
+         MVI   27(9),21                MUST BE HANG. INDNT (CD=21)      00075900
+         B     *+8                 GO AROUND                            00076000
+REGULAR  MVI   27(9),20                REGULAR INDENT (CODE=20)         00076100
+         L     2,AM14                  1ST MESSAGE LINE                 00076200
+         B     GETN-4                  GO GET A NUMBER                  00076300
+         SPACE 3                                                        00076400
+***THIS ROUTINE CHOOSES DESIRED TYPE OF TAB                             00076500
+TAB      L     3,AM22             2ND LINE--CHOICES                     00076600
+         L     4,AM23                  3RD--CHOICES                     00076700
+         BAL   6,DECIDE         FIND OUT WHICH CHOICE HE MADE           00076800
+         B     REGTAB                                                   00076900
+         B     DOTTAB                                                   00077000
+         B     *+4                                                      00077100
+         LA    7,8                     TYPE FOR END TAB TEXT            00077200
+         B     BLNKADD                 GO GET LP HITS                   00077300
+DOTTAB   MVI   27(9),24         NO, TAB WITH DOTS (CD=24)               00077400
+         B     *+8                     GO AROUND                        00077500
+REGTAB   MVI   27(9),23                REGULAR TAB (CODE=23)            00077600
+         L     2,AM24                  1ST LINE                         00077700
+         L     4,AM25                  3RD--POSSIBLE TAB POSITIONS      00077800
+         B     GETN                    GO GET A NUMBER                  00077900
+         SPACE 3                                                        00078000
+SPECHARS L     3,AM30             2ND LINE--CHOICES                     00078100
+         L     4,AM31                  3RD--CHOICES                     00078200
+         BAL   6,DECIDE         FIND OUT WHICH ONE HE TOOK              00078300
+         B     REDEFINE                                                 00078400
+         B     SPECBLNK                                                 00078500
+         B     REDEFINE                                                 00078600
+         L     2,AM32                  MUST BE SUPER SCRIPT             00078700
+         L     4,ABLNK                 3RD LINE                         00078800
+         MVI   NOOPM1+1,X'F0'      SET FLAG SO DON'T SUBTRACT 1FROM LEN 00078900
+         MVI   27(9),X'2B'      CODE FOR SUPERSCRIPT = 2B               00079000
+         B     GETN             GO GET A NUMBER                         00079100
+SPECBLNK LA    7,X'2E'                                                  00079200
+         B     BLNKADD                                                  00079300
+REDEFINE L     2,AM8                   ASK FOR CODE NO.                 00079400
+         L     4,ABLNK                 BLANK                            00079500
+         MVI   27(9),X'31'             CODE FOR SPECIAL CHARS           00079600
+         B     GETN                                                     00079700
+*********************************************************************** 00079800
+*                                                                       00079900
+*        THESE FORMATS ARE FOR TABLES                                   00080000
+*                                                                       00080100
+*********************************************************************** 00080200
+TABLE    L     3,AM54                                                   00080300
+         L     4,ABLNK                                                  00080400
+         BAL   6,DECIDE            LET GUY MAKE A CHOICE                00080500
+         B     BEGTABLE            FOR START TABLE                      00080600
+         MVI   NOOPM1+1,X'F0'      MAKE IT GO LAST                      00080700
+         LA    7,12                TYPE FOR END TABLE                   00080800
+         B     BLNKADD             GO GET A LP HIT                      00080900
+BEGTABLE MVI   27(9),8             BEGIN TABLE IS TYPE 8                00081000
+         L     2,AM58                                                   00081100
+         L     3,AM49                                                   00081200
+         MVI   0(3),C' '                                                00081300
+         MVC   1(73,3),0(3)                                             00081400
+         L     4,AM10                                                   00081500
+         LH    5,CURSADD           GET BASE CURSOR ADDRESS              00081600
+         LA    5,35(5)          ADD IN LEN OF MESSAGES                  00081700
+         STH   5,CURSADDR       STORE ACTUAL ADDR FOR CURSOR            00081800
+         BAL   10,ATTNTYP2         LET GUY TYPE IN STUFF                00081900
+         LA    5,BLNKS             WHERE TO READ IN STUFF               00082000
+         BAL   7,RDSTRNG           GO READ IN STUFF                     00082100
+         L     2,AM2                                                    00082200
+         L     3,ABLNK                                                  00082300
+         L     4,ABLNK                                                  00082400
+         LA    6,9                 ORDER CODE IS 9                      00082500
+         B     GETHITS+4           GO GET LP HITS                       00082600
+LINES    L     3,AM56                                                   00082700
+         L     4,AM57                                                   00082800
+         BAL   6,DECIDE            LET GUY CHOOSE                       00082900
+         B     GCODE                                                    00083000
+         B     VCODE                                                    00083100
+         B     LCODE                                                    00083200
+QCODE    LA    7,15                                                     00083300
+         B     BLNKADD                                                  00083400
+LCODE    LA    7,14                                                     00083500
+         B     BLNKADD                                                  00083600
+VCODE    MVI   27(9),10                                                 00083700
+         B     BEGTABLE+4                                               00083800
+GCODE    MVI   27(9),9                                                  00083900
+         B     BEGTABLE+4                                               00084000
+         EJECT                                                          00084100
+*********************************************************************** 00084200
+*                                                                       00084300
+*        THESE FORMATS REQUIRE TWO LP HITS                            * 00084400
+*                                                                       00084500
+*********************************************************************** 00084600
+CAPCAP   MVI   SAVER7+3,2      FORMAT TYPE FOR BEGIN MULT CAPS          00084700
+         L     2,SAVER7                                                 00084800
+         MH    2,=H'12'                                                 00084900
+         A     2,INQAADD                                                00085000
+         L     3,AM12                                                   00085100
+         L     4,ABLNK                 3RD                              00085200
+         STM   2,4,SAVER234        SAVE MESSAGES                        00085300
+         LA    6,10               ORDER CODE FOR SIMPLE FORMAT          00085400
+         ST    6,0(9)             STORE IN OTYPE                        00085500
+         MVI   BROWSE1,255     TURN ON 1ST BROWSE FLAG                  00085600
+MULTLOOP BAL   10,ATTNTYP1      WAIT FOR LP, END OR CANCEL              00085700
+         B     REDISPLY           IF END KEY, REDISPLAY                 00085800
+         BAL   1,LEGALHIT      CHECK FOR LEGAL HIT                      00085900
+         L     8,=V(POINT)        GET ADDR OF HIT POINT                 00086000
+         MVC   SAVEPT1(12),0(8)   SAVE 1ST POINT                        00086100
+         LH    6,COMAREA1+6            SAVE BUFFER ADDR OF FIRST HIT    00086200
+         STH   6,BUFFADD                                                00086300
+         BAL   10,ATTNTYP1        WAIT FOR 2ND HIT, END OR CANCEL       00086400
+         B     REDISPLY           IF END KEY, REDISPLAY                 00086500
+         BAL   1,LEGALHIT      CHECK FOR LEGAL HIT                      00086600
+         L     8,=V(POINT)        GET ADDR OF HIT POINTER               00086700
+         CLC   BUFFADD(2),COMAREA1+6   COMPARE BUFFER ADDRESS           00086800
+         BNH   ARNDEXCH           YES, GO AROUND                        00086900
+         LM    5,7,SAVEPT1                                              00087000
+         MVC   SAVEPT1(12),0(8)                                         00087100
+         STM   5,7,0(8)                                                 00087200
+ARNDEXCH LH    6,SAVEPT1+10       LOAD LENGTH INTO STRING OF HIT 1      00087300
+         BCTR  6,0                DECREMENT BY 1                        00087400
+         STH   6,SAVEPT1+10        STORE BACK ALTERED LENGTH            00087500
+         MVC   4(12,9),0(8)       MOVE 2ND POINT TO OPOINT              00087600
+         L     7,SAVER7            LOAD THE FORMAT CODE TYPE            00087700
+         LA    7,2(7)                                                   00087800
+         ST    7,24(9)             STORE AT OSTRING                     00087900
+         L     15,=V(MODIFY)      ADD TO DATA STRUCTURE                 00088000
+         BALR  14,15                                                    00088100
+         BCTR  7,0                                                      00088200
+         BCTR  7,0     R7 IS NOW CODE FOR BEGIN MULT CAPS/UNDERSCORE    00088300
+         ST    7,24(9)         STORE IN OTYPE                           00088400
+         ST    7,SAVER7            SAVE THE CODE (FORMAT)               00088500
+         MVC   4(12,9),SAVEPT1      MOVE IN 1ST PT TO OPOINT            00088600
+         BALR  14,15        ADD 1ST POINT TO DATA STRUCTURE             00088700
+         L     15,=V(BEGIN)      GO RECREATE DISPLAY                    00088800
+         BALR  14,15                                                    00088900
+         B     MULTLOOP           GO DO IT ALL AGAIN                    00089000
+         SPACE 2                                                        00089100
+UNDRSCOR MVI   SAVER7+3,3     FORMAT TYPE FOR START UNDERSCORING        00089200
+         B     CAPCAP+4                                                 00089300
+SAVEPT1  DS    3F                 SAVE 1ST LP HIT HERE                  00089400
+SAVER7   DC    F'0'       SAVEAREA FOR FORMAT CODE                      00089500
+BUFFADD  DS    H                                                        00089600
+         EJECT                                                          00089700
+*********************************************************************** 00089800
+*        THIS IS ROUTINE TO DELETE FORMATTING PREVIOUSLY SPECIFIED    * 00089900
+*********************************************************************** 00090000
+INQUIRE  L     2,AM16                  1ST INQUIRE MESSAGE              00090100
+         L     3,ABLNK                 2ND                              00090200
+         L     4,ABLNK                 3RD                              00090300
+         STM   2,4,SAVER234        SAVE MESSAGES                        00090400
+         MVI   BROWSE1,255     TURN ON 1ST BROWSE FLAG                  00090500
+         BAL   10,ATTNTYP1         WAIT FOR LP, END OR CANCEL           00090600
+         B     REDISPLY            IF END, ALL DONE                     00090700
+         BAL   1,LEGALHIT      CHECK FOR LEGAL HIT                      00090800
+         L     5,=V(TYPE)          GET ADDR OF TYPE OF HIT              00090900
+INQLOOP  CLI   3(5),9            WAS IT FORMATTING                      00091000
+         BL    NOTFORM             NO, PU OUT MESSAGE                   00091100
+         CLI   3(5),10             THIS IS A DEBUG AID:                 00091200
+         BH    NOTFORM                                                  00091300
+         MVI   M17+10,C' '         BLANK OUT AREA                       00091400
+         MVC   M17+11(15),M17+10                                        00091500
+         MVC   SAVINQ(16),0(5)         SAVE HIT POINTER                 00091600
+         XC    ITEM(4),ITEM            ZERO 1ST WORD OF ITEM(RETRIEVE)  00091700
+         MVC   ITEM+4(4),4(5)          MOVE IN ID NAME                  00091800
+         LA    1,ITEM                  R1 POINTS TO PASS AREA           00091900
+         L     15,=V(GETITEM)          GET ADDR OF ORDERS SECTION       00092000
+         BALR  14,15                                                    00092100
+         L     4,ITEM+12               GET ORDERS ADDR                  00092200
+         A     4,8(4)                  GET ADDR OF 1ST ORDER            00092300
+         AH    4,10(5)                 ADD DISP OF THIS ORDER           00092400
+         IC    3,0(4)             GET ORDER CODE                        00092500
+         N     3,=XL4'0F'         CLEAR OUT LAST ORDER IF THERE         00092600
+         CH    3,=H'10'           IS IT TYPE 10                         00092700
+         BNE   TYPE09             NO, MUST BE TYPE 9                    00092800
+         L     2,AM17                  BET BASE OF MESSAGE              00092900
+         IC    3,1(4)                  GET TYPE                         00093000
+         MH    3,=H'12'            MULTIPLY BY 12                       00093100
+         A     3,INQAADD               GET TYPE A MESSAGE               00093200
+INQBOTH  MVC   10(12,2),0(3)       MOVE CORRECT MESS INTO EXPLAINER     00093300
+         CLI   1(4),X'31'              IF SPEC CHAR, TELL WHAT NUMBER   00093400
+         BE    YES                                                      00093500
+         SR    3,3                                                      00093600
+         IC    3,1(4)                                                   00093700
+         SH    3,=H'44'                                                 00093800
+         BNL   NO                                                       00093900
+         AH    3,=H'26'                                                 00094000
+         BNH   NO                                                       00094100
+         SH    3,=H'6'                                                  00094200
+         BNH   YES                                                      00094300
+         SH    3,=H'10'                                                 00094400
+         BNH   NO                                                       00094500
+         SLL   3,2                                                      00094600
+         B     *(3)                                                     00094700
+         B     YES                                                      00094800
+         B     NO                                                       00094900
+         B     YES                                                      00095000
+         B     YES                                                      00095100
+         B     YES                                                      00095200
+         B     YES                                                      00095300
+         B     YES                                                      00095400
+         B     NO                                                       00095500
+         B     YES                                                      00095600
+YES      SR    3,3                                                      00095700
+         IC    3,2(4)                                                   00095800
+         CVD   3,CONVERT                                                00095900
+         UNPK  UNPK(4),CONVERT+6(2)                                     00096000
+         OI    UNPK+3,X'F0'                                             00096100
+         MVC   23(3,2),UNPK+1                                           00096200
+         CLI   23(2),X'F0'                                              00096300
+         BNE   NO                                                       00096400
+         MVI   23(2),X'40'                                              00096500
+         CLI   24(2),X'F0'                                              00096600
+         BNE   NO                                                       00096700
+         MVI   24(2),X'40'                                              00096800
+NO       L     4,ABLNK                                                  00096900
+         L     2,AM17                                                   00097000
+         L     3,AM18                  2ND                              00097100
+         STM   2,4,SAVER234        SAVE MESSAGES                        00097200
+         BAL   10,ATTNTYP1             WAIT FOR LP, END OR CANCEL       00097300
+         B     REDISPLY                IF END, ALL DONE                 00097400
+         BAL   1,LEGALHIT      CHECK FOR LEGAL HIT                      00097500
+         L     5,=V(TYPE)              GET ADDR OF TYPE                 00097600
+         CLC   0(16,5),SAVINQ          COMPARE TWO HITS                 00097700
+         BNE   INQLOOP                 IF DIFFERENT, NO DELETE          00097800
+         MVI   3(9),X'FF'          MOVE IN CODE FOR DELETE              00097900
+         MVC   4(12,9),4(5)        MOVE IN POINT TO DELETE              00098000
+         MVC   16(12,9),4(5)       TWICE--SAME ORDER                    00098100
+         L     15,=V(MODIFY)       CALL MODIFY TO DELETE IT             00098200
+         BALR  14,15                                                    00098300
+         L     15,=V(BEGIN)            CALL BEGIN TO REDISPLAY IN BUFFE 00098400
+         BALR  14,15                                                    00098500
+         B     INQUIRE         DO IT AGAIN                              00098600
+NOTFORM  L     2,AM16A                 1ST--NOT FORMAT SYMBOL           00098700
+         B     INQUIRE+4       TRY AGAIN                                00098800
+TYPE09   L     2,AM49                                                   00098900
+         MVI   0(2),C' '        CLEAR OUT AREA                          00099000
+         MVC   1(73,2),0(2)                                             00099100
+         LH    7,2(4)             GET LENGTH                            00099200
+         L     6,ITEM+16          GET DATA PAGE ADDR                    00099300
+         A     6,8(6)             ADD DISP TO START                     00099400
+         AH    6,4(4)             ADD DISP TO THIS STRING               00099500
+         BCTR  7,0                -1 FOR EXECUTE                        00099600
+         LTR   7,7                     SO I CAN TEST VALUE              00099700
+         BL    NULL                    IF LEN = 0, TELL HIM SO          00099800
+         EX    7,MOVE09           MOVE IN STRING                        00099900
+GETTYPE  IC    3,1(4)                  GET TYPE                         00100000
+         MH    3,=H'12'            MULTIPLY BY 12 (LEN OF EACH IDENT)   00100100
+         A     3,INQ9ADD          ADD BASE                              00100200
+         L     2,AM17                                                   00100300
+         MVC   10(12,2),0(3)                                            00100400
+         L     4,AM49                                                   00100500
+         B     NO+4                                                     00100600
+MOVE09   MVC   0(0,2),0(6)                                              00100700
+NULL     MVC   0(8,2),NOTHING                                           00100800
+         B     GETTYPE                                                  00100900
+NOTHING  DC    C'**NULL**'                                              00101000
+SAVINQ   DS    4F                                                       00101100
+ITEM     DC    5F'0'                                                    00101200
+INQ9ADD  DC    AL1(11),AL3(INQ9-12)                                     00101300
+INQAADD  DC    AL1(11),AL3(INQA-12)                                     00101400
+CONVERT  DC    D'0'                                                     00101500
+UNPK     DC    F'0'                                                     00101600
+         EJECT                                                          00101700
+*********************************************************************** 00101800
+***CHECKS TO SEE IF LP HIT EITHER CHAR OR CAPITAL STRING              * 00101900
+*********************************************************************** 00102000
+LEGALHIT L     5,=V(TYPE)             GET ADDR OF TYPE OF HIT           00102100
+         CLI   3(5),2          IS IT BRANCH--IF YES BAD                 00102200
+         BE    BAD3            SO TELL HIM SO                           00102300
+         CLI   3(5),6          IS IT LABEL                              00102400
+         BE    BAD3            YES, SO TELL HIM TO TRY AGAIN            00102500
+         BR    1                      YES, OK--RETURN                   00102600
+*********************************************************************** 00102700
+*THIS ROUTINE DECIDES WHICH OF UP TO 4 CHOICES THE USER MADE          * 00102800
+* RETURN CODE: RET ADDR + 0:  UPPER LEFT                              * 00102900
+*                       + 4:  UPPER RIGHT                             * 00103000
+*                       + 8:  LOWER LEFT                              * 00103100
+*                       +12:  LOWER RIGHT                             * 00103200
+*********************************************************************** 00103300
+DECIDE   ST    6,SAVER6         SAVE RETURN ADDRESS                     00103400
+         MVI   LP+1,X'FA'          DON'T CHECK FOR HIT IN TEXT          00103500
+         L     2,AM47             1ST LINE--CHOOSE 1                    00103600
+         BAL   10,ATTNTYP3         WAIT FOR LP OR CANCEL                00103700
+         DC    X'00',C'UGH'       IF SOMEHOW GOT END KEY, BOMB          00103800
+         LH    6,COMAREA1+10    GET Y-REGISTER POSITION OF HIT          00103900
+         CH    6,=H'200'        WAS IT A VALID CHOICE                   00104000
+         BH    NOGOOD           NO, TELL HIM                            00104100
+         MVI   LP+1,X'0A'       TURN OFF CHECK FOR TEXT-HIT             00104200
+         CH    6,=H'120'        IS CHOICE ON TOP LINE                   00104300
+         BH    TOPGROUP         YES, GO THERE                           00104400
+         LH    6,COMAREA1+8     GET X-REGISTER POSITION OF HIT          00104500
+         CH    6,=H'2040'       WAS HIT LOWER LEFT ONE                  00104600
+         BL    END1             YES, SET RETURN ADDRESS                 00104700
+         L     6,SAVER6         MUST HAVE BEEN LOWER RIGHT--RESTORE     00104800
+         B     12(6)            RETURN WITH CODE OF 12                  00104900
+TOPGROUP LH    6,COMAREA1+8     GET X-REGISTER POSITION OF HIT          00105000
+         CH    6,=H'2040'       WAS HIT UPPER LEFT ONE                  00105100
+         BL    END2             YES, SET RETURN CODE                    00105200
+         L     6,SAVER6         MUST HAVE BEEN UPPERRIGHT CHOICE        00105300
+         B     4(6)             RETURN WITH CODE OF 4                   00105400
+END1     L     6,SAVER6         RESTORE RETURN ADDRESS                  00105500
+         B     8(6)             RETURN WITH CODE OF 8 FOR LOWER LEFT    00105600
+END2     L     6,SAVER6         RESTORE RETURN ADDRESS                  00105700
+         BR    6                RETURN WITH CODE OF 0 FOR UPPER LEFT    00105800
+NOGOOD   L     2,AM15                  MESSAGE SAYING NOT VALID CHOICE  00105900
+         B     ATTNTYP3         TRY AGAIN                               00106000
+SAVER6   DS    F                                                        00106100
+         EJECT                                                          00106200
+**********************************************************************  00106300
+*                                                                       00106400
+*        ROUTINE TO GET READY TO READ STUFF FOR ALTER CODES             00106500
+*                                                                       00106600
+**********************************************************************  00106700
+GETSTUFF LA    5,BEGEDIT     ADDR OF SCOPE MESSAGE                      00106800
+         L     6,ALTERLEN          LENGTH OF MESSAGE                    00106900
+         LA    7,STARTADD              START DISPLAY AT ADDR STARTADD   00107000
+         BAL   8,WRITER            WRITE OUT IPLAY                      00107100
+         LH    7,STARTADD          GET BASE ADDR OF ALTER DISPLAY       00107200
+         AH    7,ALTRCURS              ADD CURSOR ADDR TO BASE ADDR     00107300
+         AH    7,ALTLEN            ADD DISP OFVER K                     00107400
+         STH   7,CURSADDR              AND SAVE IT FOR I/O              00107500
+         BAL   8,INSERTC           INSERT CURSOR                        00107600
+         LA    7,STARTADD              ADDR TO START DISPLAY AT         00107700
+         BAL   8,STARTER           RESTART DISPLAY                      00107800
+         L     15,=V(GACB)           GET GACB ADDR                      00107900
+         MVI   15(15),9                ENABLE END AND CANCEL            00108000
+         B     TOSUPER                                                  00108100
+ALTRCURS DC    AL2(BLNKS-BEGEDIT+5)                                     00108200
+ALTLEN   DC    H'0'                                                     00108300
+**********************************************************************  00108400
+*                                                                       00108500
+*        ROUTINE TO READ AND CONVERT A CHAR NUMBER INTO 1 HEX BYTE      00108600
+*        RETURNS:  +0 IF BAD NUMBER                                     00108700
+*        RETURNS:  +4 IF GOOD (REGHT-JUSTED IN R5)                      00108800
+*                                                                       00108900
+**********************************************************************  00109000
+         DS    F                                                        00109100
+GETNUMS  ST    5,GETNUMS-4         SAVE RETURN                          00109200
+         LA    5,GETNUM            READ INTO HERE                       00109300
+         LA    6,3                 3 DIGITS                             00109400
+         LA    7,CURSADDR          ADDR TO READ FROM                    00109500
+         BAL   8,READCURS          READ THE NUMBER                      00109600
+         BAL   8,STARTER           RESTART DISPLAY                      00109700
+         LA    6,3                 ONLY READ 3 NUMBERS                  00109800
+         SR    5,5                WILL CREATE NUMBER IN R5              00109900
+         LR    4,5                WILL GET EACH DIGIT IN R4             00110000
+NUMLOOP  CLI   GETNUM,X'1A'       DID HE READ IN ANYTHING MORE          00110100
+         BE    RET        NO, LEAVE LOOP                                00110200
+         MH    5,=H'10'           MULTIPLY NUMBER BY 10                 00110300
+         TM    GETNUM,X'F0'            TEST IF IT'S A DECIMAL DIGIT     00110400
+         BNO   BADN                    IF NOT, TELL HIM                 00110500
+         NI    GETNUM,X'0F'       CLEAR OFF CHAR BITS                   00110600
+         IC    4,GETNUM           INSERT IN R4                          00110700
+         AR    5,4                ADD DIGIT TO TOTAL                    00110800
+         MVC   GETNUM(3),GETNUM+1   SHIFT GETNUM LEFT 1 BYTE            00110900
+         BCT   6,NUMLOOP          TRY AGAIN (TWICE)                     00111000
+RET      L     6,GETNUMS-4         RELOAD RETURN                        00111100
+         B     4(6)               GO FORTH                              00111200
+BADN     L     6,GETNUMS-4         RELOAD RETURN                        00111300
+         BR    6         RETURN WITH ERROR                              00111400
+         EJECT                                                          00111500
+*********************************************************************** 00111600
+*        ROUTINE TO CHOOSE DESIRED BRANCH OPTION                      * 00111700
+*********************************************************************** 00111800
+BROPTION L     3,AM38        CHOICES                                    00111900
+         L     4,ABLNK                                                  00112000
+         BAL   6,DECIDE      LET GUY MAKE CHOICE                        00112100
+         B     BRNLEV        HE WANTS TO CHANGE BRNCH LEVEL             00112200
+NOOPLINK MVI   PRNTFLAG,1    WANTS TO NOOP LINKS SO SET FLAG            00112300
+         B     GETSET                                                   00112400
+BRNLEV   L     2,AM19        1ST LINE--TYPE IN NUMBER                   00112500
+         L     3,ABLNK            2ND BLANK                             00112600
+         L     4,ABLNK            3RD--BLANK                            00112700
+         MVI   NOOPRET+1,X'F0'    SET BRANCH TO RETURN WITHOUT LP HITS  00112800
+         B     GETNUMB                 GO GET A NUMBER                  00112900
+OPTBACK  L     6,=V(BROPTION)          GET ADDR OF BROPT INDICATOR      00113000
+         LTR   6,6            CHECK IF PRINTER IS IN MODULE             00113100
+         BE    GETSET                                                   00113200
+         STH   5,0(6)                  STORE THE BRANCH OPTION          00113300
+         B     GETSET                  RETURN NO NORMAL OPERATIONS      00113400
+*********************************************************************** 00113500
+*                                                                       00113600
+*        SUBROUTINE TO READ IN A STRING OF CHARACTERS                   00113700
+*                                                                       00113800
+*********************************************************************** 00113900
+         DS    F                                                        00114000
+RDSTRNG  ST    7,RDSTRNG-4         SAVE RETURN ADDRESS                  00114100
+         ST    5,28(9)    ALSO SAVE FOR MODIFY                          00114200
+         LA    6,80     LENGTH                                          00114300
+         LA    7,CURSADDR    ADDR OF WHERE TO FEAD FROM                 00114400
+         BAL   8,READCURS    GO READ TO THE CURSOR                      00114500
+         LH    2,DECB+18       GET RESIDUAL LENGTH                      00114600
+         SR    6,2    SUBTRACT OFF ORIGINAL LENGTH                      00114700
+         BCTR  6,0    FUDGE FACTOR                                      00114800
+         STH   6,24(9)    ALSO PASS LENGTH TO MODIFY                    00114900
+         LTR   6,6                     CHECK FOR 0                      00115000
+         BE    BACK                IF LEN = 0 DON'T TRANSLATE           00115100
+         BCTR  6,0    -1 FOR EXECUTE                                    00115200
+         EX    6,TRANS       GET RID OF 00 AND 15                       00115300
+BACK     L     6,RDSTRNG-4         RELOAD RETURN ADDRESS                00115400
+         BR    6                   RETURN                               00115500
+         TITLE 'ROUTINE TO CATCH PROGRAM BOMBS AND TAKE A SNAP'         00115600
+*********************************************************************** 00115700
+*********************************************************************** 00115800
+         CNOP  0,4                 FORCE ALLIGNMENT                     00115900
+TXT360BM B     84(15)                                                   00116000
+         DC    AL1(7),CL7'TXT360B'                                      00116100
+SAVREGS3 DC    18F'0'                                                   00116200
+         STM   14,12,12(13)                                             00116300
+         LR    14,13                                                    00116400
+         LA    13,12(15)                                                00116500
+         USING SAVREGS3,13                                              00116600
+         ST    13,8(14)                                                 00116700
+         LM    12,13,SAVREGSA          REESTABLISH ORGINAL ADDRESSING   00116800
+         USING TXTSAV01,13                                              00116900
+         USING TXT360+4096,12                                           00117000
+         USING GDCB,11                                                  00117100
+         L     11,=V(GDCB)                                              00117200
+         CLI   ATTNFLAG,1              WAS I IN ATTN ROUT WHEN BOMBED   00117300
+         BNE   GETSET                  YES, ALL'S OK                    00117400
+         MVI   NOOP+1,0                NO, DON'T GO BACK TO SUPER       00117500
+         MVI   ATTNFLAG,0              CLEAR OUT FLAG                   00117600
+         B     GETSET                  REDISPLAY TEXT                   00117700
+ATTNFLAG DC    X'0'                                                     00117800
+SAVREGSA DC    A(TXT360+4096,TXTSAV01)                                  00117900
+         LTORG                                                          00118000
+         TITLE 'A MESS OF MASSAGES'                                     00118100
+PMESSADD DC    A(PRNTMESS)                                              00118200
+ABLNK DC A(MBLNK)                                                       00118300
+AM2 DC AL1(L'M2),AL3(M2)                                                00118400
+AM3 DC AL1(L'M3),AL3(M3)                                                00118500
+AM4 DC AL1(L'M4),AL3(M4)                                                00118600
+AM5 DC AL1(L'M5),AL3(M5)                                                00118700
+AM6 DC AL1(L'M6),AL3(M6)                                                00118800
+AM7 DC AL1(L'M7),AL3(M7)                                                00118900
+AM8 DC AL1(L'M8),AL3(M8)                                                00119000
+AM9 DC AL1(L'M9),AL3(M9)                                                00119100
+AM10 DC AL1(L'M10),AL3(M10)                                             00119200
+AM11 DC AL1(L'M11),AL3(M11)                                             00119300
+AM12 DC AL1(L'M12),AL3(M12)                                             00119400
+AM13 DC AL1(L'M13),AL3(M13)                                             00119500
+AM14 DC AL1(L'M14),AL3(M14)                                             00119600
+AM15 DC  AL1(L'M15),AL3(M15)                                            00119700
+AM16 DC AL1(L'M16),AL3(M16)                                             00119800
+AM16A DC AL1(L'M16A),AL3(M16A)                                          00119900
+AM17 DC AL1(L'M17),AL3(M17)                                             00120000
+AM18 DC AL1(L'M18),AL3(M18)                                             00120100
+AM19 DC AL1(L'M19),AL3(M19)                                             00120200
+AM20 DC AL1(L'M20),AL3(M20)                                             00120300
+AM21 DC AL1(L'M21),AL3(M21)                                             00120400
+AM22 DC AL1(L'M22),AL3(M22)                                             00120500
+AM23 DC AL1(L'M23),AL3(M23)                                             00120600
+AM24 DC AL1(L'M24),AL3(M24)                                             00120700
+AM25 DC AL1(L'M25),AL3(M25)                                             00120800
+AM26     DC    AL1(L'M26),AL3(M26)                                      00120900
+AM27     DC    AL1(L'M27),AL3(M27)                                      00121000
+AM28 DC AL1(L'M28),AL3(M28)                                             00121100
+AM29 DC AL1(L'M29),AL3(M29)                                             00121200
+AM30 DC AL1(L'M30),AL3(M30)                                             00121300
+AM31 DC AL1(L'M31),AL3(M31)                                             00121400
+AM32 DC AL1(L'M32),AL3(M32)                                             00121500
+AM34 DC AL1(L'M34),AL3(M34)                                             00121600
+AM35 DC AL1(L'M35),AL3(M35)                                             00121700
+AM36     DC    AL1(L'M36),AL3(M36)                                      00121800
+AM37 DC AL1(L'M37),AL3(M37)                                             00121900
+AM38 DC AL1(L'M38),AL3(M38)                                             00122000
+AM40 DC AL1(L'M40),AL3(M40)                                             00122100
+AM41 DC AL1(L'M41),AL3(M41)                                             00122200
+AM42 DC AL1(L'M42),AL3(M42)                                             00122300
+AM43 DC AL1(L'M43),AL3(M43)                                             00122400
+AM44 DC AL1(L'M44),AL3(M44)                                             00122500
+AM45 DC AL1(L'M45),AL3(M45)                                             00122600
+AM46 DC AL1(L'M46),AL3(M46)                                             00122700
+AM47 DC AL1(L'M47),AL3(M47)                                             00122800
+AM48 DC AL1(L'M48),AL3(M48)                                             00122900
+AM49 DC AL1(L'M49),AL3(M49)                                             00123000
+AM50 DC AL1(L'M50),AL3(M50)                                             00123100
+AM52 DC AL1(L'M52),AL3(M52)                                             00123200
+AM54 DC AL1(L'M54),AL3(M54)                                             00123300
+AM56 DC AL1(L'M56),AL3(M56)                                             00123400
+AM57 DC AL1(L'M57),AL3(M57)                                             00123500
+AM58 DC AL1(L'M58),AL3(M58)                                             00123600
+MBLNK DC X'15'                                                          00123700
+         GINIT                                                          00123800
+BEGEDIT  GSRT                                                           00123900
+         GEVM                                                           00124000
+         GDV   0,3800,B                                                 00124100
+         GDV   4090,3800,U                                              00124200
+         GDV   0,760,B                                                  00124300
+         GDV   4090,760,U                                               00124400
+         GDV   50,3960,B                                                00124500
+         GECP  B                                                        00124600
+ALTERM   DC    C'THESE ARE THE AVAILABLE "ALTER" FORMATS'               00124700
+         DC X'15'                                                       00124800
+         DC    C'   LIGHTPEN THE FORMATS DESIRED'                       00124900
+         DC X'15'                                                       00125000
+     DC  X'15'                                                          00125100
+      DC  X'15'                                                         00125200
+         DC    C'*RETURN TO NORMAL OPERATIONS',X'1515'                  00125300
+         DC    C'*COLUMN JUSTIFICATION ON (DEF)'                        00125400
+      DC  X'15'                                                         00125500
+         DC    C'*   COLUMN JUSTIFICATION OFF'                          00125600
+      DC  X'15'                                                         00125700
+         DC    C'*LINE JUSTIFICATION ON (DEF)'                          00125800
+      DC  X'15'                                                         00125900
+         DC    C'*   LINE JUSTIFICATION OFF'                            00126000
+         DC    X'15'                                                    00126100
+      DC  X'15'                                                         00126200
+         DC    C'*HYPHENATION ON (DEF)'                                 00126300
+      DC  X'15'                                                         00126400
+         DC    C'*   HYPHENATION OFF'                                   00126500
+      DC  X'15'                                                         00126600
+         DC    C'*ADD WORDS TO HYPHEN DICT.'                            00126700
+     DC  X'15'                                                          00126800
+         DC    C'*   CLEAR OLD HYPHEN DICT./ADD NEW WORDS'              00126900
+     DC  X'15'                                                          00127000
+      DC  X'15'                                                         00127100
+         DC    C'*SPEC. NO. OF LINES/PAGE (DEF=50)'                     00127200
+      DC  X'15'                                                         00127300
+     DC  X'15'                                                          00127400
+         DC    C'*ONE-COL. FORMAT WITH WIDTH (DEF=74)'                  00127500
+      DC  X'15'                                                         00127600
+         DC    C'*TWO-COL. FORMAT WITH WIDTH'                           00127700
+      DC  X'15'                                                         00127800
+      DC  X'15'                                                         00127900
+         DC    C'*SPEC. RIGHT MARGIN POS. (DEF=74)'                     00128000
+      DC  X'15'                                                         00128100
+         DC    C'*SPEC. LEFT MARGIN POS. (DEF=0)'                       00128200
+      DC  X'15'                                                         00128300
+     DC  X'15'                                                          00128400
+         DC    C'*SINGLE SPACE (DEF)'                                   00128500
+     DC  X'15'                                                          00128600
+         DC    C'*   DOUBLE SPACE'                                      00128700
+      DC  X'15'                                                         00128800
+      DC  X'15'                                                         00128900
+         DC    C'*TITLE FOR EACH PAGE'                                  00129000
+      DC  X'15'                                                         00129100
+         DC    C'*SUBTITLE FOR EACH PAGE'                               00129200
+      DC  X'15'                                                         00129300
+         DC    C'*DATE ON EACH PAGE'                                    00129400
+      DC  X'15'                                                         00129500
+         DC    C'*RUNNING FOOT FOR EVEN-NO. PAGES'                      00129600
+      DC  X'15'                                                         00129700
+         DC    C'*RUNNING FOOT FOR ODD-NO. PAGES'                       00129800
+      DC  X'15'                                                         00129900
+      DC  X'15'                                                         00130000
+         DC    C'*SET TAB'                                              00130100
+      DC  X'15'                                                         00130200
+      DC  X'15'                                                         00130300
+         DC    C'*PAGE NUMBER FOR (RE)NUMBERING'                        00130400
+     DC  X'15'                                                          00130500
+      DC  X'15'                                                         00130600
+         DC    C'*ALL PAGES RIGHT-HAND'                                 00130700
+      DC  X'15'                                                         00130800
+     DC  X'15'                                                          00130900
+         DC    C'*NUMBER FOOTNOTES AUTOMATICALLY'                       00131000
+     DC  X'15'                                                          00131100
+         DC    X'15'                                                    00131200
+         GECF  B                                                        00131300
+BLNKS    DC    40C' '                                                   00131400
+M49      DC    CL74' '                                                  00131500
+         DC    X'15'                                                    00131600
+ALTGTRU  GTRU  0                                                        00131700
+ENDALTER EQU   *                                                        00131800
+         GINIT                                                          00131900
+PRNTMESS GSRT                                                           00132000
+         GEVM                                                           00132100
+         GDV   1394,2500,B                                              00132200
+         GECF  L                                                        00132300
+         GTXT  'I''M PRINTING NOW'                                      00132400
+         GEVM                                                           00132500
+         GDV   1230,1500,B                                              00132600
+         GECF  L                                                        00132700
+         GTXT  'WILL FWEEEP WHEN DONE'                                  00132800
+PNTGTRU  GTRU  0                                                        00132900
+M0 DC C' THIS IS THE FORMATTING PHASE:  HIT DESIRED FNC. KEY. ',X'15'   00133000
+M2 DC C' LIGHTPEN PTS. FOR THIS FORMAT',X'15'                           00133100
+M3 DC C'THAT''S NOT TEXT; TRY AGAIN',X'15'                              00133200
+M4 DC C'TO AN UNDEFINED LABEL; TRY AGAIN',X'15'                         00133300
+M5 DC C'NOT LINK/BRANCH POINT; TRY AGAIN',X'15'                         00133400
+M6 DC C' LITEPEN THE ASTERISK OF THE LINK OR THE EXPLAINER OF THE BRANCX00133500
+               H.',X'15'                                                00133600
+M7 DC C' *REGULAR INDENT                      *HANGING INDENT',X'15'    00133700
+M8 DC C'TYPE IN CODE NO. OF SPECIAL CHARACTER:    ',X'15'               00133800
+M9 DC C'TYPE IN NO. OF LINES TO SKIP:    ',X'15'                        00133900
+M10 DC C' END KEY ACCEPTS; CANCEL KEY REJECTS',X'15'                    00134000
+M11 DC C'INVALID POS. DEC. INTEGER; TYPE ANOTHER:    ',X'15'            00134100
+M12 DC C' LIGHTPEN ENDPTS. (2 HITS) FOR THIS FORMAT',X'15'              00134200
+M13 DC C'THAT''S NOT ON THE LIST; TYPE ANOTHER:    ',X'15'              00134300
+M14 DC C'TYPE IN NO. OF SPACES TO INDENT:    ',X'15'                    00134400
+M15 DC C' NOT A VALID CHOICE; TRY AGAIN',X'15'                          00134500
+M16 DC C' LIGHTPEN THE SYMBOLS OF THE FORMAT YOU WISH EXPLAINED (# OR $X00134600
+               )',X'15'                                                 00134700
+M16A DC C' THAT WAS NOT A FORMAT SYMBOL; TRY ANOTHER',X'15'             00134800
+M17 DC CL26' THIS IS:',X'15'                                            00134900
+M18 DC C' LIGHTPEN IT AGAIN TO DELETE IT; ELSE LP ANOTHER FORMAT SYMBOLX00135000
+               ',X'15'                                                  00135100
+M19 DC C'TYPE IN NO. OF BRANCH LEVEL (DEF=1ST):    ',X'15'              00135200
+M20 DC C' *BEGIN A REGULAR KEEP                *BEGIN A TWO-COLUMN KEEPX00135300
+               ',X'15'                                                  00135400
+M21 DC C' *BEGIN A FLOATING KEEP               *END ANY OF THE KEEPS'   00135500
+  DC  X'15'                                                             00135600
+M22 DC C' *REGULAR TAB                        *TAB WITH LEADERS',X'15'  00135700
+M23 DC C' *END TABULAR TEXT',X'15'                                      00135800
+M24 DC C'TYPE IN NUM (1-20) OF POS. TO TAB TO:    ',X'15'               00135900
+M25 DC C' DEFAULT:  NUM 1 = POS 5, 2=10, 3=15,..., 19=95, 20=100'       00136000
+         DC    X'15'                                                    00136100
+M26      DC    C'TYPE IN NAME FOR PRINT FILE:',X'15'                    00136200
+M27      DC    CL44'SYS1.P1518.AVD.',X'15'                              00136300
+M28 DC C' TYPE IN COL. POS. OF LEFT/RIGHT MARGIN:',X'15'                00136400
+M29 DC CL40' TYPE IN COLUMN WIDTH DESIRED:',X'15'                       00136500
+M30 DC C'                                     *SPECIAL BLANK',X'15'     00136600
+M31 DC C' *SPECIAL CHARACTERS                 *SUPERSCRIPTS',X'15'      00136700
+M32 DC C'TYPE IN DIGIT (0-9) TO BE SUPERSCRIPTED:    ',X'15'            00136800
+M34 DC C'TYPE IN NUM (1-6) OF HEADING DESIRED:    ',X'15'               00136900
+M35 DC C' *BEGIN NEW COLUMN                   *BEGIN NEW PAGE',X'15'    00137000
+M36      DC    CL28'THAT ALREADY EXISTS; AGAIN?',X'15'                  00137100
+M37      DC    C' LITEPEN THE LABEL YOU WISH RETRIEVED'                 00137200
+     DC X'15'                                                           00137300
+M38 DC C' *CHANGE BRANCH LEVEL FROM 1ST       *DON''T PRINT LINKS'      00137400
+         DC    X'15'                                                    00137500
+M40 DC C'TYPE IN TITLE:',X'15'                                          00137600
+M41 DC C'TYPE IN SUBTITLE:',X'15'                                       00137700
+M42 DC C'TYPE IN EVEN FOOT:',X'15'                                      00137800
+M43 DC C'TYPE IN ODD FOOT:',X'15'                                       00137900
+M44 DC C'TYPE IN TAB POSITIONS:',X'15'                                  00138000
+M45 DC C' TYPE IN NUM. OF LINES (25-75) PER PAGE:',X'15'                00138100
+M46 DC C'TYPE IN PAGE NO. TO START AT:',X'15'                           00138200
+M47 DC C' LIGHTPEN DESIRED CHOICE:',X'15'                               00138300
+M48 DC C'TYPE IN WORDS WITH HYPHENATION:',X'15'                         00138400
+M50 DC C' ENTER ALTERS:   LIGHTPEN POINT FOR ALTER CODES',X'15'         00138500
+M52 DC C' *QUICKIE PRINTOUT                   *FULL PRINTOUT',X'15'     00138600
+M54 DC C' *BEGIN A TABLE                      *END A TABLE',X'15'       00138700
+M56 DC C' *DRAW HORIZ LINE SEGS              *DRAW VERTICAL LINES'      00138800
+         DC    X'15'                                                    00138900
+M57 DC C' *DRAW HORIZ LINE OF BEG TABLE      *END VERT LINES OF ABOVE'  00139000
+         DC    X'15'                                                    00139100
+M58 DC C' TYPE IN COL. POSITIONS:',X'15'                                00139200
+INQA DC CL12'SINGLE CAP'                                                00139300
+ DC CL12'BEGIN CAPS'                                                    00139400
+ DC CL12'BEG UNDRSCRE'                                                  00139500
+ DC CL12'END CAPS'                                                      00139600
+ DC CL12'END UNDRSCRE'                                                  00139700
+ DC CL12'NEW PAGE'                                                      00139800
+ DC CL12'PARAGRAPH'                                                     00139900
+ DC CL12'END TAB TEXT'                                                  00140000
+ DC CL12'CENTER LINE'                                                   00140100
+ DC CL12'AS-IS TEXT'                                                    00140200
+ DC CL12'2-COL KEEP'                                                    00140300
+ DC CL12'END TABLE'                                                     00140400
+ DC CL12'REGULAR KEEP'                                                  00140500
+ DC CL12'DRAW HORIZ'                                                    00140600
+ DC CL12'END VERTICAL'                                                  00140700
+ DC CL12'END KEEP'                                                      00140800
+ DC CL12'NEW COLUMN'                                                    00140900
+ DC CL12'FLOATNG KEEP'                                                  00141000
+ DC CL12'SKIP LINES'                                                    00141100
+ DC CL12'REG INDENT'                                                    00141200
+ DC CL12'HANG INDENT'                                                   00141300
+ DC CL12'HEADING'                                                       00141400
+ DC CL12'REGULAR TAB'                                                   00141500
+ DC CL12'TAB WITH DOT'                                                  00141600
+ DC CL12'JUST LINES'                                                    00141700
+ DC CL12'RT-HND PAGES'                                                  00141800
+ DC CL12'PARACAP'                                                       00141900
+ DC CL12'HEAD SET B'                                                    00142000
+ DC CL12'CHECK SPELL'                                                   00142100
+ DC CL12'DOUBLE SPACE'                                                  00142200
+ DC CL12'HYPHENATE'                                                     00142300
+ DC CL12'NO HYPHENS'                                                    00142400
+ DC CL12'NO LINE JUST'                                                  00142500
+ DC CL12'SINGLE SPACE'                                                  00142600
+ DC CL12'1-COL FORMAT'                                                  00142700
+ DC CL12'JUST COLS'                                                     00142800
+ DC CL12'REPAGE FROM'                                                   00142900
+ DC CL12'PAGE DEPTH'                                                    00143000
+ DC CL12'2-COL FORMAT'                                                  00143100
+ DC CL12'RIGHT MARGIN'                                                  00143200
+ DC CL12'LEFT MARGIN'                                                   00143300
+ DC CL12'NO COL JUST'                                                   00143400
+ DC CL12'SUPERSCRIPT'                                                   00143500
+ DC CL12'LEFT BRACKET'                                                  00143600
+ DC CL12'RIGHT BRACKT'                                                  00143700
+ DC CL12'SPEC BLANK'                                                    00143800
+ DC CL12'FIG FOR LIST'                                                  00143900
+ DC CL12'DATE AT TOP'                                                   00144000
+ DC CL12'SPECIAL CHAR'                                                  00144100
+ DC CL12'AUTO FOOT NO'                                                  00144200
+INQ9 DC CL12'TITLE'                                                     00144300
+ DC CL12'SUBTITLE'                                                      00144400
+ DC CL12'EVEN FOOT'                                                     00144500
+ DC CL12'ODD FOOT'                                                      00144600
+ DC CL12'SETTAB'                                                        00144700
+ DC CL12'ADD HYPHENS'                                                   00144800
+ DC CL12'CLR HYPHENS'                                                   00144900
+ DC CL12'BEGIN TABLE'                                                   00145000
+ DC CL12'HOR LNE SEGS'                                                  00145100
+ DC CL12'VERT LINES'                                                    00145200
+         END                                                            00145300
