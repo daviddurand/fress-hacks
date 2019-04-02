@@ -1,0 +1,32 @@
+:READ  SCROLLL  ASSEMBLE C1 WORK    3/26/19  22:00
+SCROLLL  CSECT                                                          00000100
+         EXTRN OPOINT,LINTBL                                            00000200
+         USING *,15               ESTABLISH ADDRESSABILITY              00000300
+         STM   1,2,12(13)         SAVE REGS USED                        00000400
+         SLL   1,4                MULTIPLY NUM OF REQUESTED LINES BY 16 00000500
+*                                 THIS GIVES AN INDEX ON THE LINE TABLE 00000600
+         A     1,ADDLTB           GET ABS POINTER AT LINETABLE ENTRY    00000700
+*                                 OF LINE USER WANTS AT TOP OF SCREEN   00000800
+         L     2,ADD              GET ADDR OF DSECT                     00000900
+         USING DSECT,2                                                  00001000
+         C     1,INDEX            IS LINE USER WANTS TO SCROLL TO       00001100
+*                                 BEYONFD END OF AREA ?                 00001200
+         BNL   NOMOVE             BRANCH IF SO                          00001300
+         MVC   STRTSCAN(12),4(1)  MOVE LINETABLE ENTRY OF REQUESTED     00001400
+*                                 LINE INTO OPOINT FOR NEXT SCAN        00001500
+         LM    1,2,12(13)         RELOAD REGS                           00001600
+         L     15,VBEGIN          ADDR OF ROUTINE TO SCAN DSTRUCT       00001700
+         BR    15                 GO SCAN DATA STRUCT                   00001800
+NOMOVE   LM    1,2,12(13)         RELOAD REGS                           00001900
+         LA    15,8               RETURN CODE SAYING SCROLLIMG ATTEMPTE 00002000
+         BR    14                 RETUR N                               00002100
+ADD      DC    A(OPOINT)          POINTER TELLING WHERE TO START SCAN   00002200
+ADDLTB   DC    A(LINTBL)          TABLE WITH DS POINTER FOR START OF EA 00002300
+*                                 EACJH LINE ON SCREEN                  00002400
+VBEGIN   DC    V(BEGIN)           ROUTINE TO CONSTRUCT BUFFER FROM DS   00002500
+         SPACE 2                                                        00002600
+DSECT    DSECT                                                          00002700
+STRTSCAN DS    CL12               POINTER TELLING WHERE TO START SCANNI 00002800
+INDEX    DS    F                  POINTER JUST PAST LAST LEGIT LINE     00002900
+*                                 TABLE ENTRY                           00003000
+         END                                                            00003100

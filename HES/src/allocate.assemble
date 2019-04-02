@@ -1,0 +1,100 @@
+:READ  ALLOCATE ASSEMBLE C1 WORK    3/26/19  21:59
+         MACRO                                                          00000100
+         REGS                                                           00000200
+         LCLA  &A                                                       00000300
+.REGGEN  ANOP                                                           00000400
+R&A      EQU   &A                                                       00000500
+&A       SETA  &A+1                                                     00000600
+         AIF   (&A LT 16).REGGEN                                        00000700
+         MEND                                                           00000800
+         TITLE 'DISC ALLOCATION ROUTINE'                                00000900
+*********************************************************************** 00001000
+*                                                                     * 00001100
+*                              ALLOCATE                               * 00001200
+*                                                                     * 00001300
+*              DYNAMICALLY CREATES A DIRECT ACCESS DATA SET           * 00001400
+*        WITH AN ARBITRARY NUMBER OF TRACKS AND OPENS IT FOR          * 00001500
+*        'OUTIN'.                                                     * 00001600
+*              ON ENTRY:                                              * 00001700
+*                   R1 -> PARM LIST -> CL44'DSNAME'                   * 00001800
+*                                   -> CL176'JFCBAREA'                * 00001900
+*                                   -> AL2(LENGTH)                    * 00002000
+*                                   -> DCB                            * 00002100
+*                                                                     * 00002200
+*              THE DCB MUST CONTAIN AN EXLST PARAMETER, WHERE:        * 00002300
+*                   EXLST -> XL1'87',AL3(JFCB)                        * 00002400
+*                                                                     * 00002500
+*              NOTE THAT THE NUMBER OF PARAMETERS PASSED IS           * 00002600
+*        CONSTANT, SO THE EXLST MAY BE INCLUDED IN THE PARM LIST.     * 00002700
+*              THE DD CARD MUST HAVE A SPACE PARAMETER (DUMMY)        * 00002800
+*        AND DISP=OLD AS WELL AS UNIT AND VOLUME INFORMATION.         * 00002900
+*                                                                     * 00003000
+*              ON EXIT:                                               * 00003100
+*                   R15 =  0 - NORMAL RETURN                          * 00003200
+*                          4 - DD CARD MISSING                        * 00003300
+*                          8 - DATA SET COULD NOT BE OPENED           * 00003400
+*                         12 - DATA SET ALREADY EXISTS                * 00003500
+*                         16 - RETURN CODE IN R0                      * 00003600
+*                                                                     * 00003700
+*              IF R15 >= 12:                                          * 00003800
+*                   R0  = RC - RETURN CODE FROM SVC 32                * 00003900
+*                                                                     * 00004000
+*********************************************************************** 00004100
+         EJECT                                                          00004200
+ALLOCATE CSECT                                                          00004300
+         USING *,R12                                                    00004400
+         B     12(R15)            BRANCH AROUND IDENTIFIER              00004500
+         DC    AL1(7),CL7'ALLOCATE' 8-BYTE IDENTIFIER                   00004600
+         STM   R14,R12,12(R13)    SAVE REGISTERS                        00004700
+         LR    R12,R15            ESTABLISH ADDRESSING                  00004800
+         LM    R2,R5,0(R1)        PICK UP PARAMETERS                    00004900
+         LA    R6,12(R1)          SAVE POINTER TO DCB ADDRESS           00005000
+         LR    R1,R6              POINT AT DCB ADDRESS                  00005100
+         MVI   0(R1),X'80'        LAST ELEMENT                          00005200
+         SVC   64                 ISSUE RDJFCB SVC                      00005300
+         USING JFCBSECT,R3        EXTABLISH ADDRESSING IN JFCB          00005400
+         MVC   JFCBDSNM(44),0(R2) MOVE IN DSNAME                        00005500
+         MVC   JFCBPQTY+1(2),0(R4) MOVE IN NUMBER OF TRKS NEEDED        00005600
+         OI    JFCBIND2,X'C0'     CHANGE DISP TO NEW                    00005700
+         L     R1,16              CVT                                   00005800
+         L     R1,0(R1)           IEATCBP                               00005900
+         L     R1,4(R1)           TCB                                   00006000
+         L     R1,12(R1)          TIOT                                  00006100
+         LA    R1,24(R1)          SKIP JOB.STEP NAME                    00006200
+         SR    R2,R2              CLEAR R2                              00006300
+         LR    R15,R2             PRE-SET RETURN CODE TO 0              00006400
+FINDUCB  IC    R2,0(R1)           GET LENGTH OF DD ENTRY                00006500
+         LTR   R2,R2              IS IT THERE?                          00006600
+         BE    NODDCARD                                                 00006700
+         CLC   4(8,R1),40(R5)     IS IT OURS?                           00006800
+         BE    FOUNDUCB                                                 00006900
+         AR    R1,R2              NEXT ENTRY                            00007000
+         B     FINDUCB            KEEP LOOKING                          00007100
+FOUNDUCB LA    R0,0(R3)           R0 -> JFCB  **MUST CLEAR TOP BIT**    00007200
+         MVI   JFCBCTRI,X'80'   MAKE SURE IT ALLOCATES IN TRACKS        00007300
+         LA    R1,16(R1)          (R1) -> UCB                           00007400
+         SVC   32                 ALLOCATE                              00007500
+         LTR   R0,R15             TEST RETURN CODE AND MOVE TO R0       00007600
+         BNE   ALLOCERR                                                 00007700
+         LR    R1,R6              POINT AT DCB ADDRESS                  00007800
+         MVI   0(R1),X'87'        LAST ELEMENT, OUTIN OPTION            00007900
+         SVC   22                 ISSUE OPENJ SVC                       00008000
+         TM    48(R5),X'10'       OPEN OKAY?                            00008100
+         BNO   OPENERR                                                  00008200
+         SR    R15,R15            SET GOOD RETURN CODE                  00008300
+RETURN   L     R14,12(R13)        RETURN ADDRESS                        00008400
+         LM    R1,R12,24(R13)     RESTORE REGISTERS                     00008500
+         BR    R14                                                      00008600
+OPENERR  LA    R15,4              RETURN CODE =8                        00008700
+NODDCARD LA    R15,4(R15)         RETURN CODE=4                         00008800
+         B     RETURN             SORRY                                 00008900
+ALLOCERR LA    R15,12             SET RETURN CODE FOR DUPLICATE NAME    00009000
+         CH    R0,NODDCARD+2      DUPLICATE DSNAME?                     00009100
+         BE    RETURN                                                   00009200
+         LA    R15,16             NO, SET GENERAL RETURN CODE           00009300
+         B     RETURN             LET THEM FIGURE OUT WHAT THEY MEAN    00009400
+         REGS                                                           00009500
+         EJECT                                                          00009600
+JFCBSECT DSECT                                                          00009700
+         IEFJFCBN                                                       00009800
+         END                                                            00009900

@@ -1,5 +1,0 @@
-:READ  BLR      MACRO    A1 TEMP    3/27/19  18:24
-         MACRO
-&LAB     BLR   &LOC
-&LAB     BCR   4,&LOC
-         MEND

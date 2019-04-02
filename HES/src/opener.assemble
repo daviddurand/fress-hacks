@@ -1,0 +1,8 @@
+:READ  OPENER   ASSEMBLE C1 WORK    3/26/19  22:00
+OPENER   CSECT                                                          00000100
+         USING *,15                                                     00000200
+         LR    2,1                                                      00000300
+         OPEN  ((2),(INPUT)),TYPE=J                                     00000400
+         SR    15,15                                                    00000500
+         BR    14                                                       00000600
+         END   OPENER                                                   00000700

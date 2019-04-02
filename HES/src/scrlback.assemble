@@ -1,0 +1,328 @@
+:READ  SCRLBACK ASSEMBLE C1 WORK    3/26/19  22:00
+*********************************************************************** 00000100
+*                                                                       00000200
+*        (R1) = NUMBER OF LINES TO SCROLL BACK                          00000300
+*                                                                       00000400
+*********************************************************************** 00000500
+         SPACE 3                                                        00000600
+SCRLBACK ENTER                                                          00000700
+         ST    1,NUMLINES     SAVE NUM OF LINES TO BACK UP              00000800
+         SR    10,10             INITIAL NUM OF LINES SCROLLED BACK = 0 00000900
+         ST    10,LINES           SET LINES & CHARS TO ZERO INITIALLY   00001000
+         L     2,=A(OPOINT)      ADD OF PAGE TO MOVE BACK UP            00001100
+         EXTRN OPOINT,VFADD                                             00001200
+         MVI   NOP+1,X'F0'       SET NOP INITIALLY                      00001300
+         L     12,8(2)           GET INIT DISP WITHIN ORDER FROM OPOINT 00001400
+         L     3,0(2)            R3 CONTAINS NAME OF PAGE TO MOVE BACK  00001500
+         LA    6,74                SET INITIAL NUM OF SOACES ON LINE    00001600
+         SPACE 2                                                        00001700
+RETRPAGE ST    3,PARMLIST+4      PUT PAGE NAME IN PARAM LIST TO RETRIEV 00001800
+         LA    1,PARMLIST        R1 POINTS TO PARAM LIST FOR GETITEM    00001900
+         L     15,=V(GETITEM)    WHOS IS GOING TO RETIEVE PAIR OF PAGES 00002000
+         BALR  14,15                                                    00002100
+         L     4,12(1)           R4 POINTS TO TOP OF ORDERS             00002200
+         L     8,16(1)           R8 POINTS TO TOP OF DATA               00002300
+         LA    8,12(8)           R8 POINTS TO DATA ON DATA PAGE         00002400
+         EJECT                                                          00002500
+NOP      B     *+16              INITIALLY, GET DISP IN ORDERS FROM OPO 00002600
+         LH    5,6(4)             GET LENTH OF ORDERS PAGE              00002700
+*                                                                       00002800
+*        SECOND TIME AND AFTER, SET INITIAL DISP IN ORDERS BY           00002900
+*        GETTING THE LENTH OF THE PAGE BEING BACKED UP                  00003000
+*                                                                       00003100
+         SH    5,=H'12'          SUBTRACT LENGTH OF PAGE HEADER         00003200
+         B     CONT              NOW, GO BACK UP                        00003300
+         SPACE 2                                                        00003400
+         MVI   NOP+1,X'00'       FALL THROUGH NOP FROM NOW ON           00003500
+         L     5,4(2)            SET R5 FROM OPOINT                     00003600
+         LA    15,11(5,4)            R15 POINTS JUST BEFORE FIRST ORDER 00003700
+         LTR   5,5    IF INITIAL DISP =THEN GO TO CHECKER               00003800
+         BE    CHECKER                                                  00003900
+         LTR   12,12               IF IN MIDDLE OFV CHAR STRING,        00004000
+         BNE   CHARORD          THEN GO TO CHARORD                      00004100
+         CLI   0(15),X'07'             IF PRE ORDER A PARA, THEN GO     00004200
+         BNE   CONT                AND DISP WITHIN ORDER = 0,           00004300
+         SH    15,=H'4'                LEN OF PARA ORDER                00004400
+         SH    5,=H'4'                 SUB LENTH FROM INDEX             00004500
+         B     *-16       SEE IF NEXT ORDER IS PARA                     00004600
+         SPACE 5                                                        00004700
+CHARORD  LA    5,8(5)               INCREMENT DISP IN ORDERS            00004800
+         EJECT                                                          00004900
+CONT     LA    4,11(4)           R4 POINTS AT BYTE JUST BEFORE FIRST    00005000
+*                                                                       00005100
+*                        ORDER SO NO BCTR NECESSARY AND SO DISP IN      00005200
+*                            ORDERS IS ACCURATE                         00005300
+UPLOOP   LTR   5,5               IF DISP IN ORDERS = 0, BACK ONTO       00005400
+*                                PREVIOUS PAGE                          00005500
+         BE    PREVPAGE                                                 00005600
+         SR    7,7                                                      00005700
+         IC    7,0(4,5)          CODE OF ORDER POINTEDAT                00005800
+         SLL   7,2               MULTIPLY BY FOUR                       00005900
+         B     *+4(7)              GO TO APPROPRIATE ROUTINE            00006000
+         B     CHKLEFT           CODE = 0 = NOOP                        00006100
+         B     STRING            CODE = 1 = REG CHARS                   00006200
+         B     BRANCH            CODE = 2 = BRANCH                      00006300
+         B     LINK              CODE = 3 = LINK                        00006400
+         B     CHKLEFT           CODE = 4 = BEGTAG                      00006500
+         B     LINK              CODE = 5 = TAG                         00006600
+         B     LABEL             CODE = 6 = LABEL                       00006700
+         B     PARA              CODE = 7 = PARA                        00006800
+         B     STRING            CODE = 8 = CAP'S                       00006900
+         B     FORM09            CODE = 9 = FORMAT                      00007000
+         B     FORM0A            CODE = A = FORMAT                      00007100
+         SPACE 5                                                        00007200
+CHECKER  LTR   12,12            IF NOT IN MIDDLE OF STRING, BRANCH      00007300
+         BE    PREVPAGE                                                 00007400
+         LA    5,8(5)              SO FIRST CHAR STRING WILL BE SEARCHE 00007500
+         B     CONT                                                     00007600
+         EJECT                                                          00007700
+LINK     BCTR  6,0               SUBTRACT ONE FROM SPACE ON LINE FOR    00007800
+*                                MARKER                                 00007900
+         B     CHKLEFT           SEE HOW MUCH SPACE IS LEFT             00008000
+         SPACE 4                                                        00008100
+LABEL    LA    15,0(4,5)            R15 POINTS AT LABEL                 00008200
+         SH    15,=H'8'          SO CAN SEE IF IT IS INTERNAL           00008300
+         TM    1(15),X'40'         CHECK IF LABEL IS INTERNAL ONE       00008400
+         BO    CHKLEFT    IF IT IS, THEN DON'T RESERVE SPACE FOR IT     00008500
+         SH    6,=H'10'            SUB LENTH OF LABEL FROM CUR SPACE    00008600
+         BNL   CHKLEFT           IF IT FITS, ALL IS WELL                00008700
+         LA    6,64              RE-SET SPACE ON NEXT LINE SO LABEL GO  00008800
+*                                THERE                                  00008900
+         LA    10,1(10)          ADD ONE TO NUMBER OF LINES ALREADY     00009000
+*                                BACKED UP                              00009100
+         B     CHKLEFT           CKECK HOW MUCH FURTHUR                 00009200
+         SPACE 3                                                        00009300
+PARA     LA    6,70              SET SPACE ON NEXT LINE TO INCLUDE 4    00009400
+*                                BLANKS FOR INDENT                      00009500
+         LA    10,2(10)                                                 00009600
+         B     CHKLEFT                                                  00009700
+         EJECT                                                          00009800
+STRING   SH    5,=H'5'           R5 INDEXES TO LENTH OF STRING          00009900
+         LTR   15,12                                                    00010000
+         BNE   *+8                 AS LENTH                             00010100
+         LH    15,0(5,4)         R15 HAS LENTH OF STRING                00010200
+         SR    12,12             CLEAR R12 OF GARBAGE FOR FUTURE        00010300
+         CR    15,6              LENTH OF STRING VS SPACE LEFT ON LUNE  00010400
+         BNH   ONLINE            BRANCH IF STRING FITS                  00010500
+         SR    14,14             CLEAR R14 FOR DIVIDE                   00010600
+         SR    15,6              LENTH MINUS HOW MUCH WILL FIT ON THIS  00010700
+*                                LINE                                   00010800
+         D     14,=F'74'         R15 HAS HOW MANY LUNES THIS STRING     00010900
+*                                WILL OCCUPY                            00011000
+         LA    15,1(15)                                                 00011100
+         AR    10,15             R10 HAS HOW MANY LINES WILL BE FILLED  00011200
+*                                IF THIS STRING PASSED                  00011300
+         C     10,NUMLINES       SEE IF THIS STRING WILL FIT            00011400
+         BH    NOTFIT            IF IT WON'T FIT (I.E. THIS IS ORDER    00011500
+*                                TO STOP AT)                            00011600
+         SPACE 3                                                        00011700
+         LA    6,74              R6 HAS MAX NUM OF CHARS ON A LINE      00011800
+         SR    6,14              SUBTRACT OVERFLOW TO GET NUM OF SPACES 00011900
+*                                LEFT ON THIS LINE                      00012000
+         LA    5,5(5)            RESTORE ORIG DISP IN ORDERS            00012100
+         B     CHKLEFT                                                  00012200
+NOTFIT   SR    10,15             GET BACK NUM OF LINES ALREADY FILLED   00012300
+         L     15,NUMLINES       R15 HAS MAX NUM OF LINES               00012400
+         SR    15,10             R15 HAS NUM OF LINES LEFT TO FILL      00012500
+         MH    15,S74                                                   00012600
+         MVI   S74+1,74                                                 00012700
+         AR    15,6              ADD LENTH LEFT ON CUR LINE             00012800
+         LR    0,15                SAVE APPROX DISP IN ORDER            00012900
+*                                                                       00013000
+*        R15 NOW HAS THE APPROX DISP WITHIN ORDER TO FILL REQUEST       00013100
+*                                                                       00013200
+         LR    14,15             LENTH TO SEARCH BACK = DISP IN ORDER   00013300
+         AR    15,8              ADD OF DATA + DISP IN ORDER            00013400
+         AH    15,2(5,4)         ADD DISP IN DATA SO R15 POINTS  INTO   00013500
+*                                STRING AT WHERE WE WANT TO BREAK IT    00013600
+         SPACE 2                                                        00013700
+FINDER   CLI   0(15),C' '        LOOK FOR A BLANK                       00013800
+         BE    FOUND             OH GOODY !                             00013900
+         BCTR  14,0              DECREMENT LENTH LEFT TO SEARCH         00014000
+         LTR   14,14             IS LENTH ZERO ?                        00014100
+         BNH   NOTTHIS           IF SO, THEN THERE'S NO BLANK IN THIS   00014200
+*                                HALF OF STRING                         00014300
+         BCTR  15,0     DECREMENT POINTER INTO STRING                   00014400
+         B     FINDER                                                   00014500
+         EJECT                                                          00014600
+ONLINE   SR    6,15              CUR LENTH MINUS LEN OF STRING          00014700
+         B     NOTFIT-8                                                 00014800
+         SPACE 3                                                        00014900
+FOUND    SR    15,8              POINTER AT BLANK MINUS TOP OF DATA     00015000
+         SH    15,2(5,4)         MINUS DISP IN DATA                     00015100
+         LR    12,15             R12 CONTAINS DISP WITHIN ORDER TO      00015200
+         LA    5,5(5)            RESET R5 = DISP IN ORDERS              00015300
+         B     DONE              ALL FINISHED                           00015400
+         SPACE 2                                                        00015500
+NOTTHIS  LR    15,0              GET BACK DISP TI OUR POUNT             00015600
+         LH    14,0(5,4)         R14 HAS LENTH OF STRING                00015700
+         SR    14,15             R14 HAS LENTH OF STRING AFTER POINT    00015800
+         AR    15,8              ADD ADDR OF TOP OF DATA                00015900
+         AH    15,2(5,4)         ADD DISP TO DATA                       00016000
+         SPACE 1                                                        00016100
+BETTRFND CLI   0(15),C' '        LOOK FOR BLANK                         00016200
+         BE    FOUND                                                    00016300
+         BCTR  14,0              DEC LENTH TO SEARCH                    00016400
+         LTR   14,14             IF ZERO AM JUST OUT OF LUCK            00016500
+         BNH   NOLUCK                                                   00016600
+         LA    15,1(15)          ADD TO POINTER INTO STRING             00016700
+         B     BETTRFND                                                 00016800
+         SPACE 2                                                        00016900
+NOLUCK   SR    12,12             IF CAN'T FIND BLANK, JUST SET DISP TO  00017000
+         B     NOTTHIS-8         ZERO AND DEPART                        00017100
+         SPACE 2                                                        00017200
+CHKLEFT  LTR   6,6               IF SPACE ON LINE = 0, THEN RESET       00017300
+         BH    *+12                SPACE AND NUM OF LINES               00017400
+         LA    6,74                                                     00017500
+         LA    10,1(10)          ADD 1 TO NUM OF LINES                  00017600
+         C     10,NUMLINES       HAVE REACHED QUOTA ?                   00017700
+         BNL   DONE                                                     00017800
+         SR    15,15             SUBTRACT LENTH OF THIS ORDER TO        00017900
+         IC    15,0(5,4)         GET TO PREVIOUS ONE                    00018000
+         SLL   15,1                                                     00018100
+         SH    5,ORDERLN(15)                                            00018200
+         B     UPLOOP                                                   00018300
+         EJECT                                                          00018400
+DONE     IC    15,0(5,4)           TYPE OF ORDER BEING SCANNED          00018500
+         N     15,=XL4'3F'             ZONK !                           00018600
+         SLL   15,1    TO GET DISP TO THE ORDER BEING SCANNED           00018700
+         SH    5,ORDERLN(15)    SUB LEN OF ORDER BEING SCANNED          00018800
+RESTORE  ST    3,0(2)              PUT PAGE NAME IN OPOINT              00018900
+         ST    5,4(2)            PUT DISP IN ORDERS IN OPIINT           00019000
+         ST    12,8(2)           PUT DISP WITHIN ORDER IN OPOINT        00019100
+         L     13,4(13)          HSA ADDRESS                            00019200
+         LM    14,12,12(13)      RESTORE REGS                           00019300
+         DROP  13                                                       00019400
+         USING SCRLBACK,15       ORIGINAL BASE REG                      00019500
+         L     15,=V(BEGIN)      ADD OF SCANNING PROG                   00019600
+         BR    15                                                       00019700
+         SPACE 2                                                        00019800
+BRANCH   EQU   RESTORE              IF BRANCH, STOP GOING BACK          00019900
+         SPACE 2                                                        00020000
+         USING SCRSAV01,13       RESET BASE REG                         00020100
+PREVPAGE L     15,=A(VFADD)      ADD OF ADD OF VF                       00020200
+         L     15,0(15)          R15 POINTS AT TOP OF VF                00020300
+         LR    14,15               SAVE ADDRESS OF TOP OF TABLE         00020400
+         CLC   5(3,15),PARMLIST+5    VF ENTRY VS LAST PAGE RETRIEVED    00020500
+         BE    INVF                                                     00020600
+         LA    15,4(15)                                                 00020700
+         B     *-14                                                     00020800
+         SPACE 2                                                        00020900
+INVF     CR    14,15         TOP OF TABLE VS CUR POINTER (MUST CHECK    00021000
+*                                  BECAUSE FIRST ENTRY DOES NOT HAVE BIT00021100
+                                   SET BEFORE IT)                       00021200
+         BE    RESTORE      IF IT IS, THEN DON'T SCROLL ANY MORE        00021300
+         TM    0(15),X'80'      ENTRY BEFORE OURS A LAST ENTRY ?        00021400
+         BO    RESTORE             IF IT IS, THEN ITS ALL OVER          00021500
+         L     3,0(15)           R3 HAS NEXT PAGE NAME TO SCAN          00021600
+         B     RETRPAGE+0        RETRIEVE AND SCAN THIS PAGE            00021700
+         SPACE 3                                                        00021800
+FORM09   LR    7,5           FORMAT TYPE = 9                            00021900
+         SH    7,=H'6'                                                  00022000
+         LA    7,0(4,7)                                                 00022100
+         CLI   0(7),5        CHECK FOR END OF                           00022200
+         BNH   PAST          HANGING INDENT                             00022300
+         STH   10,LINES      SAVE #LINES AND CHARS                      00022400
+         STH   6,CHARS                                                  00022500
+PAST     BCTR  6,0                                                      00022600
+         B     CHKLEFT                                                  00022700
+         SPACE 4                                                        00022800
+FORM0A   LR    7,5           FORMAT TYPE IS 0A                          00022900
+         BCTR  7,0                                                      00023000
+         BCTR  7,0                                                      00023100
+         LA    7,0(4,7)                                                 00023200
+         CLI   0(7),21       CHECK FOR                                  00023300
+         BE    HANFIND        HANGING INDENT                            00023400
+         CLI   0(7),5        CHECK FOR END OF                           00023500
+         BNH   PS2           HANGING INDENT                             00023600
+         STH   10,LINES                                                 00023700
+         STH   6,CHARS                                                  00023800
+PS2      CLI   0(7),19       CHECK FORSKIPLINES                         00023900
+         BE    SKPLNS        TYPE = 19                                  00024000
+         CLI   0(7),20       CHECK FOR INDENT                           00024100
+         BE    INDENT        TYPE = 20                                  00024200
+         CLI   0(7),7        CHECK FOR  PARAGRAPH                       00024300
+         BE    PARA          TYPE = 7                                   00024400
+         CLI   0(7),27       PARACAP ??                                 00024500
+         BE    PARA          TYPE = 27                                  00024600
+         CLI   0(7),10       AS-IS ??                                   00024700
+         BE    ASIS          TYPE = 10                                  00024800
+         CLI   0(7),9        CHECK FOR CENTER                           00024900
+         BE    ASIS          TYPE = 9                                   00025000
+         CLI   0(7),6        NEWPAGE ??                                 00025100
+         BE    NEWPAGE       TYPE = 6                                   00025200
+         CLI   0(7),17       CHECK FOR NEW COLUMN                       00025300
+         BE    NEWPAGE        TYPE = 17                                 00025400
+         CLI   0(7),22       IS THIS A HEADING??                        00025500
+         BE    HEADING       TYPE = 22                                  00025600
+         B     CHKLEFT       IT IS NONE OF THE ABOVE...                 00025700
+SKPLNS   SR    7,7                                                      00025800
+         LR    9,5                                                      00025900
+         BCTR  9,0                                                      00026000
+         IC    7,0(4,9)      SKIP THE NUMBER OF LINES                   00026100
+         AR    10,7            SPECIFIED BY THE NUMBER FIELD            00026200
+         LA    6,74                                                     00026300
+         B     CHKLEFT                                                  00026400
+INDENT   LA    10,1(10)      SPACE BACKE ONE                            00026500
+         LA    6,74                                                     00026600
+         B     CHKLEFT                                                  00026700
+NEWPAGE  LA    10,6(10)      SCROLL BACK SIX                            00026800
+         LA    6,74                                                     00026900
+         B     CHKLEFT                                                  00027000
+HEADING  LR    9,5                                                      00027100
+         BCTR  9,0                                                      00027200
+         LA    7,0(4,9)                                                 00027300
+         CLI   0(7),6                                                   00027400
+         BE    TWO                                                      00027500
+         CLI   0(7),5        ACCORDING TO NUMBER FIELD,                 00027600
+         BE    TWO           SCROLL BACK 6,4,OR 2 LINES                 00027700
+         CLI   0(7),4                                                   00027800
+         BE    FOUR                                                     00027900
+         CLI   0(7),3                                                   00028000
+         BE    FOUR                                                     00028100
+         CLI   0(7),2                                                   00028200
+         BE    FOUR                                                     00028300
+         CLI   0(7),1                                                   00028400
+         BNE   CHKLEFT                                                  00028500
+         LA    10,2(10)                                                 00028600
+FOUR     LA    10,2(10)                                                 00028700
+TWO      LA    10,2(10)                                                 00028800
+         LA    6,74                                                     00028900
+         B     CHKLEFT                                                  00029000
+HANFIND  ST    8,HOLD                                                   00029100
+         LR    9,10          FIND # LINES IN HANGING INDENT             00029200
+         SH    9,LINES                                                  00029300
+         STH   9,HOLDME                                                 00029400
+         SR    8,8                                                      00029500
+         LR    7,5                                                      00029600
+         BCTR  7,0                                                      00029700
+         IC    8,0(4,7)                                                 00029800
+         LA    7,74                                                     00029900
+         SR    7,8                                                      00030000
+         STH   7,S74                                                    00030100
+         MH    9,=H'74'      FIND # CHARACTERS IN HANGING INDENT        00030200
+         AH    9,CHARS                                                  00030300
+         AR    9,6                                                      00030400
+         SR    8,8                                                      00030500
+         DR    8,7           FIND ACTUAL # LINES IN HANGI-G INDENT      00030600
+         LTR   8,8                                                      00030700
+         BE    *+8           SCROLL BACK ONE LINE FO EXTRA CHARS        00030800
+         LA    10,1(10)                                                 00030900
+         SH    9,HOLDME      HOW MANY MORE DO WE SCROLL BACK ??         00031000
+         AR    10,9          SCROLL BACK THIS AMOUNT                    00031100
+         L     8,HOLD                                                   00031200
+         LA    6,74                                                     00031300
+         MVI   S74+1,74                                                 00031400
+         B     CHKLEFT                                                  00031500
+         SPACE 5                                                        00031600
+S74      DC    H'74'              NUM OF CHARS ON 1 LINE                00031700
+ORDERLN  DC    H'4,8,12,12,4,8,8,4,8,8,4'                               00031800
+NUMLINES DC    F'0'                                                     00031900
+PARMLIST DC    F'0',X'4000',7H'0' PARM LIST FOR GETITEM                 00032000
+LINES    DS    H                                                        00032100
+CHARS    DS    H                                                        00032200
+HOLD     DS    F                                                        00032300
+HOLDME   DS    H                                                        00032400
+ASIS     EQU   INDENT                                                   00032500
+         LTORG                                                          00032600
+         END                                                            00032700

@@ -58,6 +58,23 @@ used for the the printer files, and convert these to
 ASCII images, so that we can modify the patches to get the
 resulting images to function correctly. 
 
+# Data files and contemporary info
+
+## unconverted
+
+This directory contains raw FRESS files suitable for running through
+the fress converter to produce XML export files.
+
+## documents
+
+Contains recently generated PDFs of some of the FRESS contemporary documentation
+that we have in FRESS files. This is a little easier to read that starting
+up vm370 in emulation an reading them with FRESS itself. Some of the files have
+artifacts like extra blank pages or Character set problems (I've been having trouble
+finding a good-looking Unicode monospace font that contains a few of the more
+esoteric EBCDIC bullets.)
+
+
 # Bonus: directory HES 
 
 This contains the relatively unexamined source of the first
@@ -70,3 +87,25 @@ Edit/Alter codes, and some of the syntax.
 
 The papers are there in original form as used by HES, which
 includes extra stuff for linking, etc.
+
+There are some 2250 Vector Scope PDF documents in the HES directory. There are
+a bunch more at bitsavers. At this point, I'm not sure if it makes sense to
+copy them all here for a more standalone archive. Many are not really that
+relevant for understanding HES itself.
+
+I've left the 2260 docs in place, but I think they are irrelevant,
+they are not a later version of the 2250, though they have similar IO
+stub libraries.
+
+## documents
+There are two word files from Ted and Andy from some HES-related
+presentation in the past.
+
+There are PDFs of some comtemporary documents courtesy of Ted Nelson's
+collection at archive.org. These include an early manual, as well
+as Ted's notes that he made when preparing the Patent database that is
+discussed in the HES papers. Also, a research progress report to IBM,
+sadly missing page 2, David Rice's masters thesis, which includes a
+section on HES, and a manual for a later version of text360
+which continued in use on MTS (the Michigan Terminal System), another
+370-based timesharing system of the 70's.

@@ -1,5 +1,0 @@
-:READ  BNLR     MACRO    A1 TEMP    3/27/19  18:24
-         MACRO
-&LAB     BNLR  &LOC
-&LAB     BCR   11,&LOC
-         MEND

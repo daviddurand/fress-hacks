@@ -1,0 +1,60 @@
+// JOB DUMP                                                             SAMP0000
+//SYSAB1  ACCESS  SDSABS                                                SAMP0010
+// DELETE  SDSABS(IO226000)                                             SAMP0020
+//IO226000  EXEC   FORTRAN(MAP)                                         SAMP0030
+      REAL*8 START(4) /8H  TEST W,8HRITE    ,8HRESPOND ,8H        /     SAMP0040
+      REAL*8 ERR020(2) /8H ERROR O,8HN 020   /                          SAMP0050
+      REAL*8 ERR021(2) /8H ERR/R /,8HN 021   /                          SAMP0060
+      REAL*8 ERR029(2) /8H ERROR O,8HN 029   /                          SAMP0070
+      REAL*8 READMI(4) /8H        ,8HREADMI  ,8H     REA,8HD-WRITE /    SAMP0080
+      REAL*8 BLANK      /8H        /                                    SAMP0090
+      REAL*8 BUFFER(9) /9*8H        /                                   SAMP0100
+      CALL CERROR(2,&2000,&2001,&2002)                                  SAMP0110
+      CALL CERROR(1,&1000,&1001,&1002)                                  SAMP0120
+      CALL CERASE (1)                                                   SAMP0130
+      CALL CERASE (2)                                                   SAMP0140
+      CALL CLWRIT (1,16,START(1),3)                                     SAMP0150
+      CALL CLWRIT (1,16,START(3),9)                                     SAMP0160
+      CALL CLWRIT (1,4,BLANK,11)                                        SAMP0170
+ 200  CALL CCRDEW (1,72,BUFFER(1))                                      SAMP0180
+      CALL CLWRIT (2,72,BUFFER(1),9)                                    SAMP0190
+      GO TO 100                                                         SAMP0200
+ 201  CALL CCREAD (2,72,BUFFER(1))                                      SAMP0210
+      CALL CERASE (1)                                                   SAMP0220
+      CALL CWAIT (2)                                                    SAMP0230
+      CALL CLWRIT (1,72,BUFFER(1),9)                                    SAMP0240
+      A=1                                                               SAMP0250
+      GO TO 101                                                         SAMP0260
+ 100  A=0                                                               SAMP0270
+ 101  DO 102 I=1,9                                                      SAMP0280
+      BUFFER(I)=BLANK                                                   SAMP0290
+ 102  CONTINUE                                                          SAMP0300
+      IF (A.EQ.0) GO TO 201                                             SAMP0310
+      GO TO 200                                                         SAMP0320
+ 1000 CALL CPWRIT(1,16,READMI(1))                                       SAMP0330
+      CALL CPWRIT(1,16,ERR020(1))                                       SAMP0340
+      GO TO 3000                                                        SAMP0350
+ 1001 CALL CPWRIT(1,16,READMI(3))                                       SAMP0360
+      CALL CPWRIT(1,16,ERR020(1))                                       SAMP0370
+      GO TO 3000                                                        SAMP0380
+ 1002 CALL CPWRIT(1,16,ERR029(1))                                       SAMP0390
+      GO TO 3000                                                        SAMP0400
+ 2000 CALL CPWRIT(2,16,READMI(1))                                       SAMP0410
+      CALL CPWRIT(2,16,ERR021(1))                                       SAMP0420
+      GO TO 3000                                                        SAMP0430
+ 2001 CALL CPWRIT(2,16,READMI(3))                                       SAMP0440
+      CALL CPWRIT(2,16,ERR021(1))                                       SAMP0450
+ 2002 GO TO 3000                                                        SAMP0460
+ 2003 CONTINUE                                                          SAMP0470
+ 3000 CONTINUE                                                          SAMP0480
+      END                                                               SAMP0490
+/*                                                                      SAMP0500
+//SYS006   ACCESS   TPLIB,193='PSWORK'                                  SAMP0510
+//   EXEC   LNKEDT(KEEP,SYS006)                                         SAMP0520
+/*                                                                      SAMP0530
+//SYS005   ACCESS     CRT1,021=                                         SAMP0540
+//SYS002  ACCESS  CRT2,020=                                             SAMP0550
+//SYS003   ACCESS     PRTR,028=                                         SAMP0560
+// EXEC IO226000                                                        SAMP0570
+/&                                                                      SAMP0580
+STOP SUPER44                                                                    

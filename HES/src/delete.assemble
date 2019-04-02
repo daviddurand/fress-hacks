@@ -1,0 +1,156 @@
+:READ  DELETE   ASSEMBLE C1 WORK    3/26/19  21:59
+         MACRO                                                          00000100
+&L       LENTH &OP                                                      00000200
+         AIF   (N'&OP EQ 0).ZERO                                        00000300
+&L       BCTR  8,0 ............PT TO PREVIOUS ORDER                     00000400
+         IC    2,0(8) .........INSERT OP CODE                           00000500
+         AGO   .CONT                                                    00000600
+.ZERO    ANOP                                                           00000700
+&L       IC    2,0(8) .........INSERT OP CODE                           00000800
+.CONT    N     2,=X'0000000F' .KILL FLAGS                               00000900
+         IC    2,LENTABLE(2) ..GET LENGTH                               00001000
+         AIF   (N'&OP EQ 0).END                                         00001100
+         SR    8,2 ............PT TO 1ST BYTE OF ORDER                  00001200
+.END     MEND                                                           00001300
+*  GENERAL DOCUMENTATION NOTES-                                         00001400
+*  WRITTIAN BY BOB WALLACE - DEC 8, 1968                                00001500
+*  "CK" MEANS CHECK, "&" MEANS AND                                      00001600
+*  REGISTER ASSIGNMENTS                                                 00001700
+*  R3= DISP TO 1ST ORDER                                                00001800
+*  R4= DISP TO 1ST STRING                                               00001900
+*  R5= PAGENAME                                                         00002000
+*  R6= DISP TO 2ND ORDER                                                00002100
+*  R7= DISP TO 2ND STRING                                               00002200
+*  R8= PTR TO CURRENT ORDER                                             00002300
+*  R12= PTR TO PAGE                                                     00002400
+DELETE   ENTER                                                          00002500
+         MVI   MOVE,X'00'      SET SYSTEM FLAG                          00002600
+         L     11,=V(OPOINT1)  PT TO OPERAND LIST                       00002700
+         LM    3,7,4(11)       LOAD OPERANDS                            00002800
+         L     8,=V(ORDERS)    SET                                      00002900
+         L     8,0(8)              PTR TO                               00003000
+         LR    12,8                       PAGE                          00003100
+         A     8,8(8)          ADD DISP TO ORDERS                       00003200
+         AR    8,3             PT TO 1ST ORDER                          00003300
+         CLR   3,6             CK IF                                    00003400
+         BNE   NOTEQUAL              SINGLE ORDER DELETE                00003500
+*  SINGLE ORDER DELETE                                                  00003600
+         BAL   1,STRINGCK      CK IF                                    00003700
+         B     STRING                STRING                             00003800
+*  SINGLE NON-STRING DELETE                                             00003900
+KILLORDR TM    0(8),X'80'      CK IF                                    00004000
+         BO    LASTSIZE              LAST ORDER                         00004100
+         LENTH                                                          00004200
+         EX    2,ZEROORDR      ZAP ORDER                                00004300
+*  RETURN                                                               00004400
+RETURN   L     13,4(13)                                                 00004500
+         LM    14,12,12(13)                                             00004600
+         BR    14                                                       00004700
+LASTSIZE LENTH                                                          00004800
+         L     1,4(12)         UPDATE                                   00004900
+         SR    1,2                    LENGTH                            00005000
+         BCTR  1,0                           OF                         00005100
+         ST    1,4(12)                          PAGE                    00005200
+LASTORDR L     10,=V(OPOINT)   CK IF                                    00005300
+         L     10,4(10)              START OF                           00005400
+         CLR   10,3                           DISPLAY                   00005500
+         BNE   AOK                                    WAS ZAPPED        00005600
+         XC    1(3,8),1(8)     IF SO,                                   00005700
+         MVI   0(8),X'80'             CREATE ENDING NO-OP               00005800
+         L     2,4(12)         UPDATE                                   00005900
+         LA    2,4(2)                 LENGTH OF                         00006000
+         ST    2,4(12)                          PAGE                    00006100
+         B     RETURN                                                   00006200
+AOK      LENTH LONG                                                     00006300
+         OI    0(8),X'80'      SET END BIT                              00006400
+         B     RETURN                                                   00006500
+*  SINGLE STRING DELETE                                                 00006600
+STRING   LH    2,2(8)          LOAD LENGTH OF STRING                    00006700
+         CLR   2,7             CK IF DELETE                             00006800
+         BNE   CONT                         TO END OF STRING            00006900
+         BCT   4,*+8           CK IF WHOLE                              00007000
+         B     KILLORDR                    STRING DELETED               00007100
+         STH   4,2(8)          MID-END STRING DELETE;  UPDATE LENGTH    00007200
+         B     RETURN                                                   00007300
+CONT     BCT   4,*+8           CK IF BEGIN-MID                          00007400
+         B     NULLONE                         STRING DELETE            00007500
+         STM   0,14,SAVEAREA   MID-MID STRING DELETE; SAVE REGS         00007600
+         XC    8(4,11),8(11)   SET SPACEORD OPERAND                     00007700
+         LA    3,8             SET LENGTH PARAM                         00007800
+         L     15,=V(SPACEORD) CALL                                     00007900
+         BALR  14,15                SPACEORD                            00008000
+         LA    15,8(6)         PT TO 2ND STRING ORDER (JUST CREARED)    00008100
+         LM    0,14,SAVEAREA   RESTORE REGS                             00008200
+         MVI   MOVE,X'01'      SET SYSTEM FLAG                          00008300
+         NI    0(8),X'7F'      KILL END BIT, IF ANY                     00008400
+         STH   4,2(8)          UPDATE 1ST ORDER LENGTH                  00008500
+         LR    8,15            FUDGE                                    00008600
+NULLONE  SR    2,7             FIND &                                   00008700
+         STH   2,2(8)                 SET 2ND STRING LENGTH             00008800
+         AH    7,4(8)          FIND &                                   00008900
+         STH   7,4(8)                 SET 2ND STRING DISP               00009000
+         B     RETURN                                                   00009100
+*  MULTIPLE ORDER DELETE                                                00009200
+NOTEQUAL BAL   1,STRINGCK      CK IF 1ST ORDER                          00009300
+         B     ONESTRNG                        IS A STRING              00009400
+ONEON    LR    5,8             SAVE PTR TO 1ST DELETE POINT             00009500
+         AR    8,6             PT TO                                    00009600
+         SR    8,3                   2ND ORDER                          00009700
+         BAL   1,STRINGCK      CK IF 2ND ORDER                          00009800
+         B     TWOSTRNG                        IS A STRING              00009900
+TWOON    TM    0(8),X'80'      CK IF DELETE                             00010000
+         BO    LASTKILL                     TO LAST ORDER ON PAGE       00010100
+         LENTH                                                          00010200
+         LA    1,1(2,6)        FIND LENGTH OF ORDERS                    00010300
+         SR    1,3                                   TO BE DELETED      00010400
+LOOP     CL    1,=F'256'       LENGTH LESS THAN/EQUAL TO XC MAX SIZE    00010500
+         BNH   ENDING          THEN GO AND FINISH UP                    00010600
+         XC    0(256,5),0(5)   ELSE ZAP 256 BYTES WORTH                 00010700
+         LA    5,256(5)        UPDATE 1ST POINT                         00010800
+         S     1,=F'256'                        AND LENGTH LEFT         00010900
+         B     LOOP            GO BACK & TRY AGAIN                      00011000
+ENDING   S     1,=F'1'         RESET LENGTH                             00011100
+         BM    *+8                          & CK IF FINISHED            00011200
+         EX    1,LASTZERO      ZAP REMAINING ORDERS                     00011300
+         B     RETURN                                                   00011400
+*  1ST ORDER IS A STRING                                                00011500
+ONESTRNG BCT   4,*+8           CK IF WHOLE                              00011600
+         B     ONEON                       STRING DELETE                00011700
+         STH   4,2(8)          UPDATE LENGTH                            00011800
+         LA    3,8(3)          PT TO                                    00011900
+         LA    8,8(8)                NEXT ORDER                         00012000
+         B     ONEON           GO BACK                                  00012100
+*  2ND ORDER IS A STRING                                                00012200
+TWOSTRNG LH    2,2(8)          LOAD LENGTH OF STRING                    00012300
+         CLR   2,7             CK IF WHOLE                              00012400
+         BE    TWOON                       STRING DELETE                00012500
+         SR    2,7             FIND &                                   00012600
+         STH   2,2(8)                 SET LENGTH                        00012700
+         LH    2,4(8)          FIND &                                   00012800
+         AR    2,7                    SET                               00012900
+         STH   2,4(8)                     DISP                          00013000
+         LENTH LONG                                                     00013100
+         BCTR  6,0             PT TO                                    00013200
+         SR    6,2                   PREVIOUS ORDER                     00013300
+         B     TWOON           GO BACK                                  00013400
+*  DELETE TO END OF PAGE                                                00013500
+LASTKILL LR    8,5             FIND &                                   00013600
+         SR    5,12                   SET NEW                           00013700
+         ST    5,4(12)                        PAGE LENGTH               00013800
+         B     LASTORDR        GO TO CK OPOINT & LAST FLAG              00013900
+*  CK IS ORDER IS A STRING                                              00014000
+*  USAGE-   BAL     1,STRINGCK                                          00014100
+*           B       STRING-RETURN                                       00014200
+*           B       NON-STRING-RETURN                                   00014300
+STRINGCK TM    0(8),X'06'      CK IF                                    00014400
+         BC    5,4(1)                NON-STRING                         00014500
+         TM    0(8),X'09'      CK IF                                    00014600
+         BCR   4,1                   STRING                             00014700
+         B     4(1)            MUST BE NON-STRING                       00014800
+LASTZERO XC    0(0,5),0(5)     ZAP LAST SET OF DEAD ORDERS              00014900
+ZEROORDR XC    0(0,8),0(8)     ZAP ONE ORDER                            00015000
+LENTABLE DC     X'03070B0B01070703070703' LENGTH-1 OF ORDER TYPES       00015100
+         ENTRY MOVE                                                     00015200
+MOVE     DC    X'00'           SYSTEM FLAG SET IF SPACEORD CALLED       00015300
+SAVEAREA DS    16F             SAVEAREA FOR SPACEORD                    00015400
+         END                                                            00015500

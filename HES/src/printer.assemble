@@ -1,0 +1,852 @@
+:READ  PRINTER  ASSEMBLE C1 WORK    3/26/19  22:00
+         ENTRY BROPTION                                                 00000100
+         EXTRN EXLST                                                    00000200
+         ENTRY OUTDCB                                                   00000300
+PRINTER  ENTER                                                          00000400
+         LA    12,PRINTER+4096      2ND BASE REGISTER                   00000500
+         USING PRINTER+4096,12                                          00000600
+         LR    11,1                    SAVE ADDR OF WHERE TO START      00000700
+         BAL   1,BLNKBLK               BLANK OUT BLOCK                  00000800
+         L     9,BLOCK                                                  00000900
+         TM    0(13),X'FF'       FLAGS FOR MERGE ARE AT TOP OF SAVEAREA 00001000
+*                                      F0 MEANS MERGE BUT NO LABELS     00001100
+*                                      FF MEANS MERGE AND TAKE LABELS   00001200
+         BZ    PRINT                   NO, I GUESS NOT                  00001300
+         BM    *+12       BRANCH AROUND IF NOT MERGING LABELS           00001400
+         LA    10,LABEL       WHEN PUNCHING, TAKE LABELS ALONG          00001500
+         ST    10,ADDRTAB+24       PUT IN ADDRESS TABLE                 00001600
+         MVC   OUTDCB+40(8),=CL8'SYSPUNCH'      CHANGE DDNAME           00001700
+         OPEN  (OUTDCB,(OUTPUT))   OPEN DCB FOR OUTPUT                  00001800
+         B     TIME     AND DON'T PUT OUT PRINTER STUFF                 00001900
+PRINT    L     10,=V(PRNTFLAG)                                          00002000
+         IC    1,0(10)       GET PRINT OPTIONS FLAG                     00002100
+         STC   1,PRNTFLAG                                               00002200
+         TM    PRNTFLAG,X'10'                                           00002300
+         BZ    ANYLINKS      NOT QUICKY SO SEE IF NOOP LINKS            00002400
+         MVC   ADDRTAB+36(4),QCKPRNT         NOOP ORDER CODES 09        00002500
+         MVC   ADDRTAB+40(4),=A(QUICK)   AND ONLY DO SPECIAL 0A ORDERS  00002600
+ANYLINKS TM    PRNTFLAG,X'01'                                           00002700
+         BZ    *+10     IF LINK FLAG NOT ON, BRANCH AROUND              00002800
+         MVC   ADDRTAB+12(4),=A(NOOPLINK)  ELSE NOOP LINKS              00002900
+         L     2,INITLEN               LOAD LENGTH OF INIT CODES        00003000
+         BCTR  2,0                     -1 FOR EXECUTE                   00003100
+         EX    2,MOVEINIT              MOVE IN INIT COE CODES           00003200
+         A     9,INITLEN               ADD LENGTH OF INITIAL CODES      00003300
+         TM    PRNTFLAG,X'10'  IS IT QUICK PRINT                        00003400
+         BZ    *+14          NO, DON'T MOVE IN TURN OFF COMMANDS        00003500
+         MVC   0(43,9),TURNOFF    IT'S QUICKY SO TURN OFF JUSTS         00003600
+         LA    9,43(9)            INCREMENT BLOCK INDEX                 00003700
+*                                                                       00003800
+*        ROUTINE TO GET DATE:  DAY, MONTH, YEAR                         00003900
+*                                                                       00004000
+TIME     TIME                                                           00004100
+         LR    0,1                                                      00004200
+         SRDL  0,16                                                     00004300
+         STC   0,PCKDYEAR                                               00004400
+         N     0,F3                                                     00004500
+         BNZ   TIMEL001                                                 00004600
+         MVI   FEB+1,X'9F'                                              00004700
+TIMEL001 SRL   1,16                                                     00004800
+         STH   1,PCKDDAY                                                00004900
+         OI    PCKDDAY+1,X'0F'                                          00005000
+         LA    4,TMONTHS                                                00005100
+         SPACE 1                                                        00005200
+TIMELP01 SP    PCKDDAY(2),0(2,4)                                        00005300
+         BNH   TIMEL002                                                 00005400
+         LA    4,22(4)                                                  00005500
+         B     TIMELP01                                                 00005600
+         SPACE 1                                                        00005700
+TIMEL002 AP    PCKDDAY(2),0(2,4)                                        00005800
+         MP    PCKDDAY-2(4),P10                                         00005900
+         MVC   PCKDDATE(1),PCKDDAY                                      00006000
+         MVC   DATEDMY,2(4)                                             00006100
+         ED    DATEDMY,PCKDDATE                                         00006200
+         L     2,=V(VFADD)      GET ADDR OF ADDR OF VERSION FILE (VF)   00006300
+         L     2,0(2)              GET ADDR OF VF                       00006400
+         LA    2,4(2)              INDEX OVER POINTER TO BOTTOM         00006500
+         CLC   1(3,2),1(11)            VF VS INPUT                      00006600
+         BNE   *-10                    LOOP UNTIL GET RIGHT POINTER INT 00006700
+         BAL   1,GETITEM               GET PAGE (RETRIEVE)              00006800
+         A     4,8(4)                  ADD DISP TO, ORDERS              00006900
+         AH    4,6(11)                 ADD IDSP TO WHERE TOS START      00007000
+         B     INCRDATA                                                 00007100
+IDLOOP   BAL   1,GETITEM                                                00007200
+         A     4,8(4)                  R4 INDEXES THROUGH ORDERS        00007300
+INCRDATA A     5,8(5)           GET ADDR OF DATA STRINGS                00007400
+         ST    5,DATAADD               STORE POINTER TO START OF DATA   00007500
+         MVI   LASTFLAG,0                                               00007600
+ORDERSLP CLI   LASTFLAG,1              IS FLAG FOR LAST ORDER ON        00007700
+         BE    NEXTID                  YES, GO GET NEW ID               00007800
+         IC    7,0(4)                  GET TYPE OF ORDER                00007900
+         TM    0(4),X'80'              IS THIS LAST ORDER               00008000
+         BZ    *+8                     NO, GO AROUND                    00008100
+         MVI   LASTFLAG,1              YES, SET FLAG FOR THIS           00008200
+         N     7,=XL4'3F'              CLEAR OUT ANY BITS               00008300
+         SLL   7,2                     MULTIPLY BY 4                    00008400
+         L     7,ADDRTAB(7)            GET ADDR OF CORRECT ROUTINE      00008500
+         BR    7                       AND GO TO IT                     00008600
+ADDRTAB  DC    A(NOOP,CHAR,BRANCH,LINK,NOOP,LAB,LAB,NOOP,LAB)           00008700
+         DC    A(FORM2,FORM3)                                           00008800
+ITEM     DC    5F'0'                                                    00008900
+LASTFLAG DC    X'00'                   FLAG FOR LAST ORDER WITHIN ID    00009000
+ENDFLAG  DC    X'00'                   FLAG FOR LAST ID WITHIN FRAGMENT 00009100
+PRNTFLAG DS    X                                                        00009200
+         SPACE 3                                                        00009300
+NEXTID   BAL   1,ENDLINK               CHECK IF IN A LINK               00009400
+         MVI   LASTFLAG,0              TURN OFF FLAG                    00009500
+         CLI   ENDFLAG,1               IS THIS LAST ID                  00009600
+         BE    RETURN                  YES, GO BACK                     00009700
+         LA    2,4(2)                  NO, GET NEXT ID NAME             00009800
+         B     IDLOOP                                                   00009900
+INIT  DC  C'+PAGE1++SWIDTH74++LENGTH74++DEPTH50++LIST(1,2,3,4)+@$TABLE X00010000
+               OF CONTENTS$$@@ +LIST(A)+@$LIST OF FIGURES$$@@ +HEADB+'  00010100
+         DC    50C' '                                                   00010200
+INITLEN  DC    A(L'INIT)                                                00010300
+MOVEINIT MVC   0(0,9),INIT                                              00010400
+         SPACE 2                                                        00010500
+         SPACE 1                                                        00010600
+**********************************************************************  00010700
+*                                                                       00010800
+*        SUBROUTINE TO BRING IN PAIRS OF PAGES (PASS AREA=ITEM)         00010900
+*              R2 POINTS TO DESIRED PAGE (1ST OF PAIR)                  00011000
+*        RETURNS: IN R4 THE ADDRESS OF THE ORDERS PAGE                  00011100
+*                 IN R5 THE ADDRESS OF THE DATA PAGE                    00011200
+*                                                                       00011300
+         DS    1F                  FOR RETURN ADDRESS                   00011400
+GETITEM  ST    1,GETITEM-4         SAVE RETURN ADDRESS                  00011500
+         L     3,0(2)              LOAD PAGE NAME                       00011600
+         TM    0(2),X'80'              IS THIS LAST ID OF FRAGMENT      00011700
+         BZ    *+12                    NO, GO AROUND                    00011800
+         X     3,=X'80000000'          CLEAR OUT BIT IN R3              00011900
+         MVI   ENDFLAG,1               SET FLAG FOR LAST ID NAME        00012000
+         ST    3,ITEM+4                PASS ID NAME FOR GETITEM         00012100
+         SR    4,4                     ZERO MEANS RETRIEVE              00012200
+         ST    4,ITEM                  PASS THIS ALSO TO GETITEM        00012300
+         LA    1,ITEM                  R1 POINTS TO MY PASS AREA        00012400
+         L     15,=V(GETITEM)          GETITEM BRINGS ID INTO CORE      00012500
+         BALR  14,15                                                    00012600
+         LM    4,5,ITEM+12             GET ADDR OF ORDERS & DATA        00012700
+         L     1,GETITEM-4         RESTORE RETURN ADDRESS               00012800
+         BR    1                   RETURN                               00012900
+**********************************************************************  00013000
+         EJECT                                                          00013100
+NOOP     LA    4,4(4)                  INCREMENT ORDERS INDEX           00013200
+         B     ORDERSLP                                                 00013300
+CHAR     LH    7,2(4)              GET LENGTH OF STRING                 00013400
+         L     3,DATAADD               GET START OF DATA                00013500
+         AH    3,4(4)                  ADD DISP OF ORDER                00013600
+         BAL   1,MOVEIN                GO MOVE INTO BLOCK               00013700
+         LA    4,8(4)             INCREMENT ORDERS INDEX                00013800
+         B     ORDERSLP                                                 00013900
+        SPACE 3                                                         00014000
+LABEL    CLI   0(4),X'46'        IS IT AN INTERNAL LABEL?               00014100
+         BE    LAB       YES, DON'T TAKE IT ALONG                       00014200
+         LA    7,7    LENGTH OF LABEL + 1 BYTE IDENTIFIER               00014300
+         BAL   10,FULLYET      SEE IF THERE'S ROOM                      00014400
+         MVI   0(9),X'02'       02 TELLS MERGE IT'S A LABEL             00014500
+         MVC   1(6,9),1(4)       MOVE IN LABEL                          00014600
+         LA    9,7(9)    INCREMENT BLOCK INDEX                          00014700
+LAB      LA    4,8(4)    INCREMENT ORDERS INDEX                         00014800
+         B     ORDERSLP        GO GET NEXT GUY                          00014900
+**********************************************************************  00015000
+*       R4 + 4 POINTS TO THE LABEL WE ARE TRYING TO FIND             *  00015100
+BRLK     L     7,=V(LABEL)      GET ADDR OF PASS AREA                   00015200
+         MVC   0(6,7),4(4)      PASS THE LABEL WE ARE GOING TO          00015300
+         L     15,=V(LINK1)     LINK1 WILL FIND THIS LABEL FOR ME       00015400
+         BALR  14,15                                                    00015500
+         B     *+4(15)          BRANCH FOR RETURN CODE                  00015600
+         B     *+8              RETURN CODE=0: ALL'S WELL               00015700
+         B     ABEND            UNDEFINED LABEL, END PRINT              00015800
+         L     7,8(13)          GET ADDR OF LSA                         00015900
+         L     7,24(7)          GET ADDR OF POINTER TO CORE ADDR OF PAG 00016000
+         L     4,=V(VFADD)      GET POINTER TO ADDR OF VF               00016100
+        L     4,0(4)                  GET ADDR OF VF                    00016200
+         LA    2,4(4)                  R2 POINTS TO 1ST REAL ENTRY      00016300
+        A     4,0(4)                  R4 HAS ADDR OF END OF TABLE       00016400
+COMPIDS  CLC   1(3,2),5(7)      COMPARE ID NAMES                        00016500
+         BE    IDBR             TEST AND RESET                          00016600
+         CR    2,4                     HAVE I TRIED ALL ID'S            00016700
+        BNL   UGH2                    YES, GO BOMB                      00016800
+        LA    2,4(2)                  NO, INCREMENT VF INDEX            00016900
+         B     COMPIDS                 TRY AGAIN                        00017000
+UGH2     DC    X'00',C'NOIDNME'        BOMB                             00017100
+IDBR     MVI   ENDFLAG,0        TURN OFF LAST PAGE FLAG                 00017200
+         TM    0(2),X'80'       TEST IF LAST PAGE OF FRAGMENT           00017300
+         BZ    *+8              NO, DON'T SET FLAR                      00017400
+         MVI   ENDFLAG,1        SET FLAG FOR LAST PAGE IN FRAGMENT      00017500
+         LM    4,5,12(7)        GET ORDER AND DATA ADDRESSES            00017600
+         CLI   LINKFLAG,1                                               00017700
+         BE    *+8                                                      00017800
+         ST    4,ITEM+12                                                00017900
+         A     4,8(4)           ADD DISP TO ORDERS                      00018000
+         L     6,=V(OPOINT)     GET ADDR OF DISP TO LABEL               00018100
+         A     4,4(6)           ADD IN DISP TO SOUGHT LABEL             00018200
+         B     INCRDATA                                                 00018300
+         SPACE 3                                                        00018400
+LINK     BAL   1,ENDLINK               CHECK IF LINK FLAG ON            00018500
+         MVC   SAVEFLGS(2),LASTFLAG    SAVE THE FLAGS                   00018600
+         ST    2,SAVE24                SAVE THE VF POINTER              00018700
+         LR    7,4                                                      00018800
+         S     7,ITEM+12                                                00018900
+         ST    7,SAVE24+4                                               00019000
+         MVI   LINKFLAG,1              TURN THE LINK FLAG ON            00019100
+         CLI   FOOTFLAG,1              SHOULD I NUMBER FOOTNOTES?       00019200
+         BE    NUMBERFT                YES                              00019300
+         LA    7,4                     PASS LENGTH 4 FOR START FOOT     00019400
+         BAL   10,FULLYET              MAKE SURE THERE IS ROOM          00019500
+         MVC   0(4,9),=C' -F-'         MOVE IN START FOOTNOTE CODE      00019600
+         LA    9,4(9)                  INCREMENT BLOCK INDEX            00019700
+         B     BRLK                    GO TAKE LINK                     00019800
+SAVEFLGS DS    H                                                        00019900
+SAVE24   DS    2F                                                       00020000
+LINKFLAG DC    X'0'                    FLAG DESIGNATING IF IN LINK      00020100
+FOOTFLAG DC X'0'                                                        00020200
+FOOTNUM  DC    H'1'                                                     00020300
+NUMBERFT LH    6,FOOTNUM               GET CURRENT NUMBER               00020400
+         BAL   1,CONVERTN+6            GET IT INTO CHARACTER            00020500
+         LA    6,1(6)                  INCREMENT NUMBER                 00020600
+         STH   6,FOOTNUM               AND SAVE IT FOR NEXT             00020700
+         LA    7,15                    SEE IF ROOM FOR MAX              00020800
+         BAL   10,FULLYET                                               00020900
+         CLI   UNPK+1,C'0'             LEADING ZERO?                    00021000
+         BE    MAX2                    YES, IGNORE IT                   00021100
+         MVI   0(9),C'/'                                                00021200
+         IC    6,UNPK+1                                                 00021300
+         STC   6,1(9)                                                   00021400
+         LA    9,2(9)                                                   00021500
+ONLY2    MVI   0(9),C'/'               MOVE IN FOR SUPERSCRIPT          00021600
+         IC    6,UNPK+2                                                 00021700
+         STC   6,1(9)                                                   00021800
+         LA    9,2(9)                                                   00021900
+ONLY1    MVI   0(9),C'/'               MOVE IN FOR SUPERSCRIPT          00022000
+         IC    6,UNPK+3                                                 00022100
+         STC   6,1(9)                                                   00022200
+         MVC   2(4,9),=C' -F-'                                          00022300
+         MVC   6(3,9),UNPK+1                                            00022400
+         MVI   9(9),C'.'                                                00022500
+         MVI   10(9),C' '                                               00022600
+         LA    9,11(9)                 INCR BLOCK INDEX                 00022700
+         B     BRLK                    CONTINUE AS USUAL                00022800
+MAX2     MVI   UNPK+1,C' '             CLEAR OUT ZERO                   00022900
+         CLI   UNPK+2,C'0'             IS 2ND ZERO TOO?                 00023000
+         BNE   ONLY2                   NO, ALL'S OK                     00023100
+         MVI   UNPK+2,C' '             ELSE SUPPRESS 2ND ZERO           00023200
+         B     ONLY1                                                    00023300
+         SPACE 3                                                        00023400
+BRANCH   BAL   1,ENDLINK               CHECK IF LINK FLAG ON            00023500
+         LR    6,4                     SET R6 TO CURRENT ORDERS INDEX   00023600
+         LA    7,1                     INITIALIZE BRANCH OPTION INDEX   00023700
+         SR    8,8                     PREVENT COMP BOMB                00023800
+CHKOPTN  CH    7,BROPTION              IS THIS THE OPTION?              00023900
+         BE    OPTION                  YES, GO SET R4                   00024000
+BACK     CLI   LASTFLAG,1              IS LAST ORDER FLAG ON            00024100
+         BE    BRLK                    YES, DEFAULT OPTION TAKEN        00024200
+         IC    8,12(6)                 GET ORDER TYPE                   00024300
+         TM    12(6),X'80'             IS THIS LAST ORDER               00024400
+         BZ    *+12                    NO, GO AROUND                    00024500
+         MVI   LASTFLAG,1              TURN ON LAST ORDER FLAG          00024600
+         X     8,=XL4'80'              CLEAR OUT FLAG                   00024700
+         C     8,=F'0'                 IS THIS A NOOP ORDER             00024800
+         BNE   *+12                    NO, GO AROUND                    00024900
+         LA    6,4(6)                  YES, INCREMENT OVER THE NOOP     00025000
+         B     BACK                    GO TRY AGAIN                     00025100
+         C     8,=F'2'                 IS IT A BRANCH ORDER             00025200
+         BNE   BRLK                    NO, TAKE DEFAULT BRANCH          00025300
+         LA    6,12(6)                 YES, INCR ORDERS                 00025400
+         LA    7,1(7)                  INCR BRANCH OPTION COUNTER       00025500
+         B     CHKOPTN                 GO CHECK AGAIN                   00025600
+OPTION   LR    4,6                     SET R4 TO TAKE CORRECT BRANCH    00025700
+         B     BRLK                    GO TAKE THE BRANCH               00025800
+BROPTION DC    H'1'                                                     00025900
+         SPACE 3                                                        00026000
+ENDLINK  CLI   LINKFLAG,1              ARE WE IN A LINK (FOOTNOTE)?     00026100
+         BNE   0(1)                    NO, RETURN                       00026200
+         MVI   LINKFLAG,0              YES, TURN OFF FLAG               00026300
+         LA    7,4                     PASS LENGTH 4 FOR END FOOTNOTE   00026400
+         BAL   10,FULLYET              MAKE SURE OF ROOM IN BLOCK       00026500
+         MVC   0(4,9),=C'-Z- '         MOVE IN CODE FOR END FOOTNOTE    00026600
+         LA    9,4(9)                  INCREMENT BLOCK INDEX            00026700
+         L     2,SAVE24                                                 00026800
+         BAL   1,GETITEM           GO GET A PAGE                        00026900
+         A     4,SAVE24+4          ADD DISPLACEMENT TO CURRENT ORDER    00027000
+         A     5,8(5)              ADD DATA DISPLACEMENT TO DATA ADDR   00027100
+         ST    5,DATAADD           SAVE START OF DATA ADDRESS           00027200
+         MVC   LASTFLAG(2),SAVEFLGS    RESTORE LAST FLAGS               00027300
+NOOPLINK LA    4,12(4)       INCREMENT ORDERS INDEX                     00027400
+         B     ORDERSLP                PROCESS NEXT ORDER               00027500
+*********************************************************************** 00027600
+CONVERTN SR    6,6                     PREVENT TOO BIG A CONVERT        00027700
+         IC    6,2(4)                  GET NO FOR SKIP OR SPACE         00027800
+         CVD   6,CONVERT               CONVERT NO. TO DECIMAL           00027900
+         UNPK  UNPK(4),CONVERT+6(2)    UNPACK DECIMAL NO.               00028000
+         OI    UNPK+3,X'F0'            GET RID OF SIGN                  00028100
+         BR    1                       RETURN                           00028200
+CONVERT  DC    D'0'                                                     00028300
+UNPK     DC    F'0'                                                     00028400
+         DC    C'-'                                                     00028500
+         EJECT                                                          00028600
+*********************************************************************** 00028700
+*                                                                       00028800
+*        ORDER TYPES 9 -- "COMPLEX" FORMATS                             00028900
+*                                                                       00029000
+*********************************************************************** 00029100
+FORM2    LA    7,10      MAKE SURE OF ROOM                              00029200
+         BAL   10,FULLYET                                               00029300
+         MVI   END9,C'@'                                                00029400
+         MVI   END9+1,C'@'     SET INITIALLY TO END MULT CAPS           00029500
+         IC    7,1(4)   GET TYPE                                        00029600
+         SLL   7,2    MAKE IT A BRANCH INDEX                            00029700
+         B     *(7)               BRANCH TO CORRECT ROUTINE             00029800
+         B     TITLE                                                    00029900
+         B     SUBTITLE                                                 00030000
+         B     EFOOT                                                    00030100
+         B     OFOOT                                                    00030200
+         B     SETTAB                                                   00030300
+         B     ADDHYPH                                                  00030400
+         B     CLRHYPH                                                  00030500
+         B     BEGTAB                                                   00030600
+         B     HORIZ                                                    00030700
+         B     VERT                                                     00030800
+TITLE    MVC   0(8,9),=C'+TITLE+@'                                      00030900
+         LA    9,8(9)                                                   00031000
+LONGY    LH    7,2(4)    GET LENGTH                                     00031100
+         LTR   7,7                                                      00031200
+         BE    SPECASE                                                  00031300
+         L     3,DATAADD   GET BASE DATA ADDRESS                        00031400
+         AH    3,4(4)    ADD DISP TO STRING                             00031500
+         BAL   1,MOVEIN     GO MOVE IN STRING                           00031600
+ARND3    MVC   0(2,9),END9                                              00031700
+         LA    9,2(9)       INCREMENT BLOCK INDEX                       00031800
+         B     LAB                                                      00031900
+END9     DC    C'  '                                                    00032000
+SUBTITLE MVC   0(11,9),=C'+SUBTITLE+@'                                  00032100
+         LA    9,11(9)                                                  00032200
+         B     LONGY                                                    00032300
+EFOOT    MVC   0(8,9),=C'+EFOOT+@'                                      00032400
+         B     TITLE+6                                                  00032500
+OFOOT    MVC   0(8,9),=C'+OFOOT+@'                                      00032600
+         B     TITLE+6                                                  00032700
+SETTAB   MVC   0(7,9),=C'+SETTAB'                                       00032800
+         LA    9,7(9)                                                   00032900
+         MVI   END9,C'+'                                                00033000
+MVBLNK   MVI   END9+1,C' '                                              00033100
+         B     LONGY                                                    00033200
+ADDHYPH  MVC   0(9,9),=C'+HYPHALT+'                                     00033300
+         LA    9,9(9)                                                   00033400
+         MVI   END9,C' '                                                00033500
+         B     MVBLNK                                                   00033600
+CLRHYPH  MVC   0(9,9),=C'+HYPHCLR+'                                     00033700
+         B     ADDHYPH+6                                                00033800
+BEGTAB   MVC   0(2,9),=C'-B'                                            00033900
+         MVI   SPECFLAG,1                                               00034000
+         LA    9,2(9)                                                   00034100
+         MVI   END9,C'-'                                                00034200
+         B     MVBLNK                                                   00034300
+HORIZ    MVC   0(2,9),=C'-G'                                            00034400
+         B     BEGTAB+10                                                00034500
+VERT     MVC   0(2,9),=C'-V'                                            00034600
+         B     BEGTAB+6                                                 00034700
+MOVEHYPH MVI   0(9),C'-'                                                00034800
+         LA    9,1(9)                                                   00034900
+         MVI   SPECFLAG,0                                               00035000
+         B     LAB                                                      00035100
+SPECASE  CLI   SPECFLAG,1                                               00035200
+         BE    MOVEHYPH                                                 00035300
+         B     ARND3                                                    00035400
+SPECFLAG DC    X'0'                                                     00035500
+         EJECT                                                          00035600
+*********************************************************************** 00035700
+*                                                                       00035800
+*        ROUTINES FOR ORDER TYPE 10 -- "SIMPLE" FORMATS                 00035900
+*                                                                       00036000
+*********************************************************************** 00036100
+FORM3    CLI   1(4),X'18'    IS IT ALTER CODE?                          00036200
+         BH    ALTER3          YES, GO THERE                            00036300
+BACK1    LA    7,7                PASS FOR ROOM                         00036400
+         BAL   10,FULLYET      MAKE ROOM IF NECESSARY                   00036500
+         IC    7,1(4)          GET TYPE                                 00036600
+         CLI   1(4),3          IS TYPE > 3                              00036700
+         BH    FORM3A          YES, GO THERE                            00036800
+         A     7,ADDR1         R7 POINTS TO 1 OF 3 SINGLE CHARS         00036900
+         IC    7,0(7)          MOVE IT TO THE BLOCK                     00037000
+         STC   7,0(9)                                                   00037100
+         LA    9,1(9)          INCR BLOCK INDEX                         00037200
+         B     NOOP            INCR ORDERS INDEX                        00037300
+ADDR1    DC    A(CHAR1)                                                 00037400
+CHAR1    DC    C' *@$'                                                  00037500
+         SPACE 2                                                        00037600
+QUICK    LA    8,BACK1             SET BRANCH ADDRESS                   00037700
+         CLI   1(4),6              IS IT  NEW PAGE                      00037800
+         BER   8                                                        00037900
+         CLI   1(4),7              PARAGRAPH                            00038000
+         BER   8                                                        00038100
+         CLI   1(4),9              CENTER                               00038200
+         BER   8                                                        00038300
+         CLI   1(4),10             AS-IS                                00038400
+         BER   8                                                        00038500
+         CLI   1(4),17             NEW COLUMN                           00038600
+         BER   8                                                        00038700
+         CLI   1(4),19             SKIP                                 00038800
+         BER   8                                                        00038900
+         CLI   1(4),20             INDENT                               00039000
+         BER   8                                                        00039100
+         CLI   1(4),21             HANDING INDENT                       00039200
+         BER   8                                                        00039300
+         CLI   1(4),22             HEADING                              00039400
+         BER   8                                                        00039500
+         CLI   1(4),27             PARAGRAPH & CAP1                     00039600
+         BE    ALTER3                                                   00039700
+         B     NOOP                                                     00039800
+         SPACE 3                                                        00039900
+FORM3A   CLI   1(4),5          IS TYPE > 5                              00040000
+         BH    FORM3B          YES, GO AROUND                           00040100
+         BE    *+16            TYPE=5, GO MOVE IN $$                    00040200
+         MVI   0(9),C'@'       ESLE =4, SO MOVE IN @@                   00040300
+         MVI   1(9),C'@'                                                00040400
+         B     *+12            GO AROUND                                00040500
+         MVI   0(9),C'$'       MOVE IN $$                               00040600
+         MVI   1(9),C'$'                                                00040700
+         LA    9,2(9)          INCREMENT BLOCK INDEX                    00040800
+         B     NOOP            INCR ORDERS INDEX                        00040900
+         SPACE 2                                                        00041000
+FORM3B   CLI   1(4),X'12'      IS TYPE > 12                             00041100
+         BH    FORM3C          YES, GO AROUND                           00041200
+         CLI   1(4),16                 IS IT END KEEP CODE?             00041300
+         BE    ENDKEEP                 YES, SPECIAL CASE                00041400
+         SH    7,=H'6'         SUBTRACT 6 FROM TYPES 6 TO 12            00041500
+         SLL   7,1             MULTIPLY BY 2                            00041600
+         A     7,ADDR2         GET POINTER TO CORRECT CODE              00041700
+         MVC   0(3,9),0(7)     MOVE IT IN                               00041800
+         LA    9,3(9)          INCREMENT BLOCK INDEX                    00041900
+         B     NOOP            INCR ORDERS INDEX                        00042000
+ENDKEEP  MVC   0(4,9),=C'-R- '                                          00042100
+         LA    9,4(9)                  INCR BLOCK INDEX                 00042200
+         B     NOOP                                                     00042300
+ADDR2    DC    A(CHAR2)                                                 00042400
+CHAR2    DC    C'-N-P-U-C-A-D-E-K-L-Q-R-W-Y-'                           00042500
+         SPACE 2                                                        00042600
+FORM3C   MVI   0(9),C'-'       START OF CODE                            00042700
+         BAL   1,CONVERTN      CONVERT HEX NO TO DEC CHAR               00042800
+         SH    7,=H'19'        SUBTRACT 19 FROM TYPES 19 TO 24          00042900
+         SLL   7,3             MULTIPLY BY 8                            00043000
+         B     *+4(7)          GO TO ROUTINE                            00043100
+         MVI   1(9),C'S'       SKIP LINES                               00043200
+         B     N2                                                       00043300
+         MVI   1(9),C'I'       INDENT                                   00043400
+         B     N2                                                       00043500
+         MVI   1(9),C'J'       HANGING INDENT                           00043600
+         B     N2                                                       00043700
+         MVI   1(9),C'H'       HEADING TYPE                             00043800
+         B     N1                                                       00043900
+         MVI   1(9),C'T'           CODE FOR TAB (REGULAR)               00044000
+         B     N2       NEED TWO DIGITS                                 00044100
+         MVC   1(2,9),=C'.T'       TAB WITH LEADER DOTS                 00044200
+         MVC   3(3,9),UNPK+2       MOVE IN 2 NOS. AND -                 00044300
+         LA    9,6(9)              INCR BLOCK INDEX                     00044400
+         B     NOOP            INCREMENT ORDERS INDEX                   00044500
+N1       MVC   2(2,9),UNPK+3   MOVE IN 1 NO AND -                       00044600
+         LA    9,4(9)          INCR BLOCK INDEX                         00044700
+         B     NOOP            INCR ORDERS                              00044800
+N2       MVC   2(3,9),UNPK+2   MOVE IN 2 NOS. AND -                     00044900
+         LA    9,5(9)          INCR BLOCK                               00045000
+         B     NOOP            INCR ORDERS                              00045100
+         EJECT                                                          00045200
+ALTER3   LA    7,26              PASS MAX LENGTH OF 26                  00045300
+         BAL   10,FULLYET      MAKE ROOM IF NECESSARY                   00045400
+         IC    7,1(4)          GET TYPE                                 00045500
+         SH    7,=H'25'        RESET TO ZERO                            00045600
+         SLL   7,2             MULTIPLY BY 4                            00045700
+         B     *+4(7)          BRANCH TO CORRECT ROUTINE                00045800
+         B     T19                                                      00045900
+         B     T1A                                                      00046000
+         B     T1B                                                      00046100
+         B     T1C                                                      00046200
+         B     T1D                                                      00046300
+         B     T1E                                                      00046400
+         B     T1F                                                      00046500
+         B     T20                                                      00046600
+         B     T21                                                      00046700
+         B     T22                                                      00046800
+         B     T23                                                      00046900
+         B     T24                                                      00047000
+         B     T25                                                      00047100
+         B     T26                                                      00047200
+         B     T27                                                      00047300
+         B     T28                                                      00047400
+         B     T29                                                      00047500
+         B     T2A                                                      00047600
+         B     T2B                                                      00047700
+         B     T2C                                                      00047800
+         B     T2D                                                      00047900
+         B     T2E                                                      00048000
+         B     T2F                                                      00048100
+         B     T30                                                      00048200
+         B     T31                                                      00048300
+         B     T32                                                      00048400
+T19      MVC   0(6,9),=C'+JUST+'                                        00048500
+         LA    9,6(9)                                                   00048600
+         B     NOOP                                                     00048700
+T1A      MVC   0(7,9),=C'+FRONT+'  ODD-NO PAGES                         00048800
+         LA    9,7(9)                                                   00048900
+         B     NOOP                                                     00049000
+T1B      MVC   0(4,9),=C'-P-*'        PARAGRAPH AND SINGLE CAP          00049100
+         LA    9,4(9)               INCREMENT BLOCK POINTER             00049200
+         B     NOOP                                                     00049300
+T1C      MVC   0(7,9),=C'+HEADB+'   HEADING GROUP B                     00049400
+         B     T1A+6                                                    00049500
+T1D      MVC   0(7,9),=C'+SPELL+'   CHECK SPELLING                      00049600
+         B     T1A+6                                                    00049700
+T1E      MVC   0(8,9),=C'+DOUBLE+'  DOUBLE SPACE                        00049800
+         LA    9,8(9)                                                   00049900
+         B     NOOP                                                     00050000
+T1F      MVC   0(8,9),=C'+HYPHEN+'   HYPHENATION                        00050100
+         B     T1E+6                                                    00050200
+T20      MVC   0(8,9),=C'+NOHYPH+'   DON'T HYPHENATE                    00050300
+         B     T1E+6                                                    00050400
+T21      MVC   0(8,9),=C'+NOJUST+'   DON'T JUSTIFY COLUMNS              00050500
+         B     T1E+6                                                    00050600
+T22      MVC   0(8,9),=C'+SINGLE+'   SINGLE SPACE                       00050700
+         B     T1E+6                                                    00050800
+T23      MVC   0(7,9),=C'+SWIDTH'      SINGLE COLUMN                    00050900
+         LA    9,7(9)                  INCR BLOCK INDEX                 00051000
+         B     NUM3                    GO GET NUMBER                    00051100
+T24      MVC   0(9,9),=C'+COLJUST+'   JUSTIFY COLUMNS                   00051200
+         LA    9,9(9)                                                   00051300
+         B     NOOP                                                     00051400
+T25      MVC   0(5,9),=C'+PAGE'    NEW PAGE FORMAT                      00051500
+         LA    9,5(9)                                                   00051600
+         B     NUM3                                                     00051700
+T26      MVC   0(6,9),=C'+DEPTH'   LINES PER PAGE                       00051800
+         LA    9,6(9)                                                   00051900
+         B     NUM2                                                     00052000
+T27      MVC   0(7,9),=C'+DWIDTH'   2 COLUMNS                           00052100
+         LA    9,7(9)                                                   00052200
+         B     NUM2                                                     00052300
+T28      MVC   0(7,9),=C'+LENGTH'   RIGHT MARGIN                        00052400
+         B     T27+6                                                    00052500
+T29      MVC   0(7,9),=C'+MARGIN'   LEFT MARGIN                         00052600
+         B     T27+6                                                    00052700
+T2A      MVC   0(12,9),=C'+COLJUSTOFF+'      NO COL JUSTIFICATION       00052800
+         LA    9,12(9)                                                  00052900
+         B     NOOP                                                     00053000
+T2B      MVI   0(9),C'/'        START OF SPECIAL CHARACTER              00053100
+         BAL   1,CONVERTN       CONVERT THE NUMBER                      00053200
+         MVC   1(1,9),UNPK+3    MOVE IN 1 DIGIT                         00053300
+INC2     LA    9,2(9)           INCR BLOCK INDEX                        00053400
+         B     NOOP                                                     00053500
+T2C      MVC   0(2,9),=C'/V'    CODE FOR LEFT BRACKET                   00053600
+         B     INC2                                                     00053700
+T2D      MVC   0(2,9),=C'/B'    CODE FOR RIGHT BRACKTER                 00053800
+         B     INC2                                                     00053900
+T2E      MVC   0(2,9),=C'/I'       CODE FOR SPECIAL BLANK               00054000
+         B     INC2                                                     00054100
+T2F      MVC   0(4,9),=C'-XA-'     CODE FOR SUPPLEMENTAL LISTINGS       00054200
+         LA    9,4(9)           INCR BLOCK INDEX                        00054300
+         B     NOOP                                                     00054400
+T30      MVC   0(6,9),=C'+DATE+'                                        00054500
+         MVC   6(19,9),DATEDMY+1                                        00054600
+         MVI   25(9),X'40'                                              00054700
+         LA    9,26(9)                                                  00054800
+         B     NOOP                                                     00054900
+T31      IC    7,2(4)                  GET TYPE OF SPEC CHAR            00055000
+         CLI   2(4),6                  IS IT SHORT?                     00055100
+         BL    *+12                    YES, JUMP AROUND                 00055200
+         MVI   0(9),C'/'               MOVE IN A /                      00055300
+         LA    9,1(9)                  INCR BLOCK INDEX                 00055400
+         MVI   0(9),C'/'               MOVE IN ANOTHER /                00055500
+         LA    3,SPECS-1(7)            GET POINTER TO CORRECT CHAR      00055600
+         IC    7,0(3)                  PICK IT UP                       00055700
+         STC   7,1(9)                  AND STORE IT                     00055800
+         B     INC2                    GO INCR BLOCK INDEX              00055900
+SPECS    DC    C'HLCVBVBCOFGS123NZHJYUAKL'                              00056000
+T32      MVI   FOOTFLAG,1              TURN ON FOOTNOTE FLAG            00056100
+         B     NOOP                                                     00056200
+NUM3     BAL   1,CONVERTN      CONVERT TO CHAR                          00056300
+         MVC   0(3,9),UNPK+1      MOVE IT INTO BLOCK (3 DIGITS)         00056400
+         MVI   3(9),C'+'       MOVE IN END CODE                         00056500
+         LA    9,4(9)          INCR BLOCK                               00056600
+         B     NOOP            INCR ORDERS                              00056700
+NUM2     BAL   1,CONVERTN      CONVERT HEX NO TO DEC H CHAR             00056800
+         MVC   0(2,9),UNPK+2   MOVE 2 DGITS TO BLOCK                    00056900
+         MVI   2(9),C'+'       MOVE IN END CODE                         00057000
+         LA    9,3(9)          INCR BLOCK INDEX                         00057100
+         B     NOOP            INCR ORDERS                              00057200
+         EJECT                                                          00057300
+*********************************************************************** 00057400
+***THIS ROUTINE MOVES IN DATA TO BLOCK---PARAMETERS PASSED ARE:         00057500
+*        R1:  RETURN ADDRESS                                            00057600
+*        R3:  ADDR IN CORE TO BEGIN MOVE FROM                           00057700
+*        R7:  NO. OF CHARACTERS TO BE MOVED                             00057800
+*        R9:  ADDR IN CORE TO MOVE TO (IN BLOCK)                        00057900
+***THE SPECIAL CHARACTERS ARE +, -, *, @, $, /                          00058000
+MOVEIN   STM   1,6,SAVREGS1            SAVE THE REGISTERS               00058100
+         LTR   7,7             CHECK IF NOTHING TO BE MOVED             00058200
+         BNH   RET2                                                     00058300
+         LR    5,7                     LOAD R5 WITH THE LENGTH OF MOVE  00058400
+LOOP2    CH    5,=H'256'               IS IT < 256                      00058500
+         BNH   ARND4                   YES, GO SET  A FLAG              00058600
+         MVI   FLAG2,0                 NO, SET FLAG FOR THIS            00058700
+         LA    6,255                   INITIALIZE LENGTH - 1            00058800
+LOOP3    SR    1,1                     PREVENT BOMB AFTER TRT           00058900
+         EX    6,TRT1                  EXECUTE TRT FOR SPECIAL CHARS    00059000
+         BC    8,NOSPEC                NO SPECIAL CHARACTERS            00059100
+         BC    2,LASTSPEC              ONLY LAST IS SPECIAL             00059200
+         MVI   FLAG1,0                 MIDDLE IS SPECIAL SO SET FLAG    00059300
+ARND1    LR    7,1                     LOAD R7 WITH ADDR OF SPEC CHAR   00059400
+         SR    7,3                     SUBTRACT ADDR OF START OF STRING 00059500
+         LTR   7,7                DO I NEED TO MOVE ANY                 00059600
+         BZ    ARND2              NO, GO AROUND                         00059700
+         BAL   10,FULLYET              IS THERE ROOM FOR INSERT         00059800
+         BCTR  7,0                     DECR LENGTH BY 1 FOR MVC         00059900
+         EX    7,MOVEIN1               EXECUTE AN MVC                   00060000
+         LA    7,1(7)             ADD BACK 1 FROM EXECUTE               00060100
+         AR    9,7                     UPDATE BLOCK INDEX               00060200
+ARND2    MVI   0(9),C'/'          MOVE SLASH TO BLOCK (FOR ALL          00060300
+         STC   2,1(9)             MOVE 2ND CHAR   (FROM TRTABLE)        00060400
+         LA    9,2(9)             INCREMENT BLOCK INDEX                 00060500
+         LR    3,1                     SET R3 TO NEW DATA INDEX         00060600
+         LA    3,1(3)                  MAINTAIN SANITY                  00060700
+         SR    6,7                     DECREMENT LENGTH                 00060800
+         BCTR  6,0                SUBTRACT 1 FOR NEXT EXECUTE           00060900
+         CLI   FLAG1,0                 IS LAST SPEC FLAG ON             00061000
+         BE    LOOP3                   NO, GO TRT SOME MORE             00061100
+         B     DECR1                   YES, GET NEXT 256                00061200
+LASTSPEC MVI   FLAG1,1                 SET FLAG IF LAST CHAR IS SPEC    00061300
+         B     ARND1                   GO MOVE DATA TO BLOCK            00061400
+NOSPEC   LA    7,1(6)                  IF NO SPEC CHARS IN LAST BUNCH,  00061500
+         BAL   10,FULLYET              IS THERE ROOM FOR INSERT         00061600
+         EX    6,MOVEIN1               EXECUTE AN MVC                   00061700
+         AR    9,7                     INCREMENT BLOCK INDEX            00061800
+         AR    3,7                     INCREMENT DATA INDEX             00061900
+DECR1    CLI   FLAG2,1                 IS FLAG FOR LAST BUNCH ON        00062000
+         BE    RET2                    YES, GET READY TO RETURN         00062100
+         SH    5,=H'256'               NO, DECREMENT LENGTH             00062200
+         B     LOOP2                     AND TRY AGAIN                  00062300
+ARND4    MVI   FLAG2,1                 SET FLAG FOR LAST BUNCH          00062400
+         LR    6,5                     LOAD R6 WITH REST OF LENGTH      00062500
+         BCTR  6,0                     MINUS ONE FOR EX'S               00062600
+         B     LOOP3                   GO TEST AND MOVE IN              00062700
+RET2     LM    1,6,SAVREGS1            RESTORE REGISTERS                00062800
+         BR    1                       RETURN                           00062900
+TRT1     TRT   0(0,3),TRTABLE                                           00063000
+MOVEIN1  MVC   0(0,9),0(3)                                              00063100
+SAVREGS1 DC    6F'0'                                                    00063200
+FLAG1    DC    X'00'                                                    00063300
+FLAG2    DC    X'00'                                                    00063400
+TRTABLE  DC    256X'00'                                                 00063500
+         ORG   TRTABLE+X'4E'                                            00063600
+         DC    C'A'                    FOR +                            00063700
+         ORG   TRTABLE+X'5B'                                            00063800
+         DC    C'D'                    FOR $                            00063900
+         DC    C'X'                    FOR *                            00064000
+         ORG   TRTABLE+X'60'                                            00064100
+         DC    C'S'                    FOR -                            00064200
+         DC    C'Z'                    FOR /                            00064300
+         ORG   TRTABLE+X'7C'                                            00064400
+         DC    C'Q'                    FOR @                            00064500
+         ORG                                                            00064600
+OUTDCB   DCB   DDNAME=OUT,RECFM=FB,BLKSIZE=1600,LRECL=80,              X00064700
+               MACRF=(W,R),DSORG=PS,DEVD=DA,EXLST=EXLST                 00064800
+         EJECT                                                          00064900
+*********************************************************************** 00065000
+***THIS ROUTINE CHECKS IF THERE IS ENOUGH ROOM IN BLOCK TO MAKE THE     00065100
+***DESIRED MOVE AND IF NOT PUTS OUT THE BLOCK AND RESTARTS BLOCK INDX   00065200
+*        R7:  LENGTH TO BE MOVED                                        00065300
+*        R9:  CURRENT ADDR IN BLOCK                                     00065400
+*        R10: RETURN ADDRESS                                            00065500
+FULLYET  ST    10,SAVRET2              SAVE RETURN ADDR                 00065600
+         ST    1,SAVER1                R1 GETS CLOBBERED                00065700
+         LR    10,7                    LOAD LENGTH TO BE MOVED          00065800
+         AR    10,9                    ADD CURRENT ADDR IN BLOCK        00065900
+         C     10,BLKLIM               COMPARE WITH END OF BLOCK        00066000
+         BL    OK1                     IF LESS, OK                      00066100
+         SR    10,10                   ZERO R10 FOR LENGTH COUNT        00066200
+LOOP5    BCTR  9,0                     DECREMENT R9 TO PNT TO LAST CHAR 00066300
+         CLI   0(9),C' '               IS LAST CHAR A BLANK             00066400
+         BE    ARND5                   YES, END LOOPING                 00066500
+         LA    10,1(10)                NO, INCREMENT LENGTH COUNT       00066600
+         B     LOOP5                   KEEP GOING UNTIL A BLANK         00066700
+ARND5    LA    9,1(9)                  ADD BACK 1 TO POINT CORRECTLY    00066800
+         LTR   10,10                   DO ANY CHANGES NEED TO BE MADE   00066900
+         BZ    OK2                     NO, RESET BLOCK INDEX            00067000
+         BCTR  10,0                    SUBTRACT 1 FOR EX'S              00067100
+         L     15,TEMPST          GET ADDRESS OF STORAGE AREA           00067200
+         EX    10,MOVEIN2              MOVE LAST CHARS TO START OF NEW  00067300
+         MVC   0(2,9),=C'/ '                                            00067400
+         LA    9,2(9)                                                   00067500
+         MVI   0(9),C' '           * BLANK OUT REST OF BLOCK            00067600
+         LTR   10,10               *                                    00067700
+         BZ    *+14                *                                    00067800
+         BCTR  10,0                *                                    00067900
+         EX    10,MOVEBLNK         *                                    00068000
+         LA    10,1(10)            *                                    00068100
+         L     9,BLOCK                                                  00068200
+         LA    9,1(9,10)       RESET BLOCK INDEX                        00068300
+         B     OK2+4                   BRANCH TO THE RETURN POINT       00068400
+OK2      L     9,BLOCK                                                  00068500
+         L     11,BLOCK                                                 00068600
+         WRITE WRITE,SF,OUTDCB,(11)     WRITE OUT A BLOCK               00068700
+         CHECK WRITE                                                    00068800
+         BAL   1,BLNKBLK               BLANK OUT BLOCK                  00068900
+         LTR   10,10                   WAS THE COUNT ZERO               00069000
+         BL    OK1       YES, GO AROUND                                 00069100
+         L     15,TEMPST          GET ADDRESS OF STORAGE AREA           00069200
+         EX    10,MOVEIN3                                               00069300
+OK1      L     10,SAVRET2              LOAD RETURN ADDR                 00069400
+         L     1,SAVER1                RESTORE R1                       00069500
+         BR    10                      RETURN                           00069600
+         DS    F                                                        00069700
+BLNKBLK  ST    1,BLNKBLK-4     SAVE RETURN ADDRESS                      00069800
+         L     1,BLOCK          GET START OF BLOCK                      00069900
+         LA    0,10     R0 = NUM OF TIMES THROUGH BLANK LOOP            00070000
+         MVI   0(1),C' '                                                00070100
+         MVC   1(160,1),0(1)                                            00070200
+         LA    1,160(1)                                                 00070300
+         BCT   0,*-10                                                   00070400
+         L     1,BLNKBLK-4      RESTORE RETURN ADDRESS                  00070500
+         BR    1                RETURN                                  00070600
+         EXTRN DISPLAY                                                  00070700
+BLKLIM   DC    A(DISPLAY+1598+10)         BLOCK LIMIT                   00070800
+BLOCK    DC    A(DISPLAY+10)      WHERE TO STSRT BUFFER                 00070900
+SAVRET2  DC    F'0'                                                     00071000
+SAVER1   DS    F                                                        00071100
+MOVEBLNK MVC   1(0,9),0(9)         0(9) SHOULD BE A BLANK               00071200
+MOVEIN2  MVC   0(0,15),0(9)                                             00071300
+MOVEIN3  MVC   0(0,11),0(15)                                            00071400
+TEMPST   DC    A(DISPLAY+1598+10+6)                                     00071500
+         EJECT                                                          00071600
+*********************************************************************** 00071700
+*                                                                       00071800
+*        PRINTS OUT CREDIT MESSAGES                                     00071900
+*              AND RETURNS TO CALLING PROGRAM                           00072000
+*                                                                       00072100
+*********************************************************************** 00072200
+RETURN   MVI   ENDFLAG,0               RESET FLAG TO OFF                00072300
+         L     6,CRLEN            GET LENGTH OF CREDIT MESSAGE          00072400
+         LA    7,23(6)                                                  00072500
+         BAL   10,FULLYET              MAKE ROOM IF FULL                00072600
+         TM    0(13),X'80'             DON'T PUT OUT CREDIT IF PUNCHING 00072700
+         BO    SETENDFG           SET LITTLR THINGY (EOF) FOR INPUF     00072800
+         BCTR  6,0                                                      00072900
+         EX    6,MOVECR           MOVE IN CREDIT MESSAGE                00073000
+         CLI   DATEDMY,C' '     SQUEEZE OUT BLANKS                      00073100
+         BNE   *+18                                                     00073200
+         MVC   DATEDMY(19),DATEDMY+1                                    00073300
+         MVI   DATEDMY+19,C' '                                          00073400
+         B     *-18                                                     00073500
+         AR    9,6                     ADD IN CREDIT LENGTH             00073600
+         MVC   1(20,9),DATEDMY         MOVE IN DATE                     00073700
+         LA    9,20(9)                                                  00073800
+         CLI   0(9),C' '                                                00073900
+         BNE   *+8                STOP LOOKING FOR BLANKS               00074000
+         BCT   9,*-8                                                    00074100
+         LA    9,1(9)                                                   00074200
+         MVC   0(14,9),=C'-N-+DEPTH50+  '                               00074300
+         LA    9,15(9)                                                  00074400
+         SRL   9,1                     SO ROUND UP TO NEXT EVEN NO.     00074500
+         SLL   9,1                                                      00074600
+         MVI   0(9),C'/'               MOVE IN FINAL SLASH--ALL DONE    00074700
+NOCRDT   L     11,BLOCK         GET ADDRESS OF BLOCK                    00074800
+         WRITE FINAL,SF,OUTDCB,(11)                                     00074900
+         CHECK FINAL                                                    00075000
+         LA    15,1      1 USED TO RESET ALL OPTIONS                    00075100
+         STH   15,BROPTION       DEFAULT BRANCH OPTION IS 1             00075200
+         STH   15,FOOTNUM      FOOTNOTES BEGIN NUMBERING AT 1           00075300
+         L     15,=V(PRNTFLAG)                                          00075400
+         MVI   0(15),0       RESET PRINT OPTIONS FLAG                   00075500
+*        RESET ADDRESSES IN BRANCH TABKE                                00075600
+         MVC   ADDRTAB+12(4),=A(LINK)    TURN LINKS BACK ON             00075700
+         MVC   ADDRTAB+36(8),RESTORE     RESET FORMATS                  00075800
+         MVC   ADDRTAB+24(4),ADDRTAB+20    RESTORE NOOP FOR LABELS      00075900
+         CLOSE (OUTDCB)                                                 00076000
+         MVC   OUTDCB+40(8),=CL8'OUT'                                   00076100
+         MVI   0(13),X'00'             CLEAR FLAG SAYING PUNCH          00076200
+         L     13,4(13)                                                 00076300
+         RETURN (14,12)                                                 00076400
+*********************************************************************** 00076500
+SETENDFG MVI   0(9),X'01'    01 MEANS END OF MERGE                      00076600
+         B     NOCRDT                                                   00076700
+*********************************************************************** 00076800
+RESTORE  DC    A(FORM2,FORM3)                                           00076900
+QCKPRNT  DC    A(LAB,NOOP)                                              00077000
+TURNOFF  DC    C'+COLJUSTOFF++NOJUST++NOHYPH++FRONT++DOUBLE+'           00077100
+         SPACE 2                                                        00077200
+***      DATE CONSTANTS                                                 00077300
+DATEDMY  DS    CL20                                                     00077400
+         DC    H'0'                                                     00077500
+PCKDDAY  DS    H                                                        00077600
+P10      DC    P'10'                                                    00077700
+PCKDDATE DS    X                                                        00077800
+PCKDYEAR DS    X                                                        00077900
+F3       DC    F'3'                                                     00078000
+TMONTHS  DC    PL2'31'                                                  00078100
+         DC    X'40402120'                                              00078200
+         DC    C' *JANUARY, 19'                                         00078300
+         DC    X'202040'                                                00078400
+FEB      DC    PL2'28'                                                  00078500
+         DC    X'40402120'                                              00078600
+         DC    C' *FEBRUARY, 19'                                        00078700
+         DC    X'2020'                                                  00078800
+         DC    PL2'31'                                                  00078900
+         DC    X'4040402120'                                            00079000
+         DC    C' *MARCH, 19'                                           00079100
+         DC    X'20204040'                                              00079200
+         DC    PL2'30'                                                  00079300
+         DC    X'4040402120'                                            00079400
+         DC    C' *APRIL, 19'                                           00079500
+         DC    X'20204040'                                              00079600
+         DC    PL2'31'                                                  00079700
+         DC    X'404040402120'                                          00079800
+         DC    C' *MAY, 19'                                             00079900
+         DC    X'2020404040'                                            00080000
+         DC    PL2'30'                                                  00080100
+         DC    X'4040402120'                                            00080200
+         DC    C' *JUNE, 19'                                            00080300
+         DC    X'2020404040'                                            00080400
+         DC    PL2'31'                                                  00080500
+         DC    X'4040402120'                                            00080600
+         DC    C' *JULY, 19'                                            00080700
+         DC    X'2020404040'                                            00080800
+         DC    PL2'31'                                                  00080900
+         DC    X'40402120'                                              00081000
+         DC    C' *AUGUST, 19'                                          00081100
+         DC    X'20204040'                                              00081200
+         DC    PL2'30'                                                  00081300
+         DC    X'402120'                                                00081400
+         DC    C' *SEPTEMBER, 19'                                       00081500
+         DC    X'2020'                                                  00081600
+         DC    PL2'31'                                                  00081700
+         DC    X'40402120'                                              00081800
+         DC    C' *OCTOBER, 19'                                         00081900
+         DC    X'202040'                                                00082000
+         DC    PL2'30'                                                  00082100
+         DC    X'40402120'                                              00082200
+         DC    C' *NOVEMBER, 19'                                        00082300
+         DC    X'2020'                                                  00082400
+         DC    PL2'31'                                                  00082500
+         DC    X'40402120'                                              00082600
+         DC    C' *DECEMBER, 19'                                        00082700
+         DC    X'2020'                                                  00082800
+CREDIT   DC    C'-N- +SWIDTH60++LENGTH60++MARGIN0++DEPTH64+-S14C-*COMPLX00082900
+               IMENTS OF THE-S2C-@HYPERTEXT EDITING SYSTEM-S4C-CENTER ' 00083000
+        DC  C'FOR-S1C-COMPUTER && INFORMATION SCIENCES-S1C-BROWN UNIVERX00083100
+               SITY-S1C-PROVIDENCE, RHODE ISLAND@@-S2C-'                00083200
+ENDCRD   EQU   *                                                        00083300
+         DC    C' '                                                     00083400
+CRLEN    DC    A(ENDCRD-CREDIT)                                         00083500
+MOVECR   MVC   0(0,9),CREDIT                                            00083600
+         SPACE 3                                                        00083700
+*********************************************************************** 00083800
+*                                                                       00083900
+*        RETURNS WITH MESSAGE IF BAD JUMP ATTEMPTED                     00084000
+ABEND    LA    7,75             PASS LENGTH OF MESSAGE                  00084100
+         BAL   10,FULLYET       MAKE SURE THERE'S ROOM                  00084200
+         MVC   0(75,9),NOLAB    MOVE IN MESSAGE FR UNDEFINED LABEL      00084300
+         LA    9,75(9)          INCR BLOCK INDEX                        00084400
+         B     RETURN                                                   00084500
+NOLAB    DC    C'-S5-*YOU TRIED TO BRANCH OR LINK TO AN UNDEFINED LABELX00084600
+               :  PRINTER TERMINATED. '                                 00084700
+         TITLE 'SOME CONSTANTS AND STORAGE--TEXT360-HYPERTEXT INTRFACE' 00084800
+DATAADD  DC    F'0'                    ADDR OF START OF CURR DATA SECT  00084900
+         LTORG                                                          00085000
+         END                                                            00085100

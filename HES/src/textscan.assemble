@@ -1,0 +1,143 @@
+:READ  TEXTSCAN ASSEMBLE C1 WORK    3/26/19  22:00
+*        INPUT                                                          00000100
+*              R1 = 0 => USER CANNOT SCROLL NOW                         00000200
+*              R1¬=0 => USER CAN SCROLL, CHECK FOR IT                   00000300
+TEXTSCAN CSECT                                                          00000400
+         EXTRN SCRLBACK,SCROLLL                                         00000500
+         EXTRN COMAREA,DISPLMAP,MAPENTLN,DESNUM                         00000600
+         EXTRN GDCB                                                     00000700
+         USING *,15               ESTABLISH ADDRESSABILITY              00000800
+         STM   14,12,12(13)       SAVE CALLER'S REGS                    00000900
+         L     2,=A(COMAREA)      WHERE TO FIND LP INFO                 00001000
+         LH    5,6(2)             ADDR WHERE INTERRUPT OCCURED          00001100
+         STH   5,TEXTADD          SAVE BUFFER ADDR OF INTERRUPT         00001200
+         L     9,=A(GDCB)         R9 => GRAPHICS DCB                    00001300
+         LH    3,16(9)            PICK UP BUFFER START ADDR FROM DCB    00001400
+         LTR   1,1                SEE IF SHOULD CHECK FOR SCROLLING     00001500
+         BNE   CHKSCRL                                                  00001600
+         LA    3,2990(3)          ADDR IN BUFFER WHERE MAIN DISPLAY ST  00001700
+         CR    5,3                IF HIT ADDR < START ADRR OF MAIN DISP 00001800
+         BL    ERRET              THEN CLOWN IS TRYING TO SCREW US      00001900
+GETDMADD L     9,=A(DISPLMAP)     START SCANNING DISPLAY MAP TO WHAT HI 00002000
+GETPAGE  TM    8(9),X'80'         IS THIS LAST PAGE BEING DISPLAYED ?   00002100
+         BO    GOTPAGE            IF SO, SEE IF HIT WAS ON IT           00002200
+         CH    5,12(9)            HIT ADDR VS START ADDR OF NEXT PAGE   00002300
+         BL    GOTPAGE            BRANCH IF HIT ON THIS PAGE            00002400
+         LA    9,12(9)            POINT AT NEXT ENTRY IN UPPER DM       00002500
+         B     GETPAGE            KEEP SEARCHING                        00002600
+         SPACE 3                                                        00002700
+GOTPAGE  L     4,=A(MAPENTLN)     ADDR OF ORDER LENS AND POINT          00002800
+         USING PARMAREA,4         ESTABLISH ADDR                        00002900
+         MVC   POINT(4),2(9)      MOVE NAME OF HIT PAGE FROM DM         00003000
+         L     2,8(9)             ADDR OF LOWER DM ENTRY FOR THIS PAGE  00003100
+         LA    2,0(2)             CLEAR HIGH ORDER BIT IF ON            00003200
+         B     CHKEND             SEE IF ANY ENTRIES IN DM              00003300
+         SPACE 3                                                        00003400
+FNDHTENT SR    3,3                ZERO                                  00003500
+         IC    3,4(1)             TYPE BYTE OF THIS DM ENTRY            00003600
+         SLL   3,2                MULTIPLY BY FOUR                      00003700
+         A     2,ORDLENS(3)       POINT R2 AT NEXT ENTRY IN DM          00003800
+CHKEND   CLI   4(2),X'FF'         CHECK END OF DM FLAG                  00003900
+         BE    ENDMAP             IF ON, BRANCH OUT                     00004000
+         CH    5,0(2)             BUFFER HIT ADDR OF NEXT DM ENTRY      00004100
+         BL    FOUNDORD           BRANCH IF HIT ON THIS ENTRY           00004200
+         LR    1,2                POINT AT NEXT ENTRY AND MOVE ON       00004300
+         B     FNDHTENT                                                 00004400
+         EJECT                                                          00004500
+FOUNDORD B     *+4(3)             GO TO PROPER ROUTINE FOR THIS ENTRY   00004600
+         B     ERRET              TYPE = 0 => ERROR                     00004700
+         B     STRING             TYPE = 1 = CHAR STRING                00004800
+         B     LINK               TYPE = 2 => BRANCH (JUST LIKE LINK)   00004900
+         B     LINK               TYPE = 3 => LINK                      00005000
+         B     ERRET              TYPE = 4 => ERROR (DOES NOT EXIST)    00005100
+         B     TAG                TYPE = 5 => TAG                       00005200
+         B     TAG                TYPE = 6 => LABEL(JUST LIKE TAG)      00005300
+         B     ERRET              TYPE = 7 => EDIT MODE PARA'S NOT      00005400
+         B     ERRET              TYPE = 8 => DOES NOT EXIST            00005500
+         B     TAG                TYPE = 9 => COMPLEX FORMAT(JUST LIKE  00005600
+         B     TAG                TYPE = 10 => SIMPLE FOTRMAT           00005700
+         SPACE 3                                                        00005800
+STRING   SH    5,0(1)             HIT ADDR MINUS START ADDR OF ORDER    00005900
+         LA    5,1(5)             0'TH CHAR IS REALLY FIRST CHAR        00006000
+         AH    5,6(1)             ADD DISP IN ORDER TO START OF THIS D  00006100
+         STH   5,POINT+10         PUT SISP IN ORDER TO HIT IN PARAM     00006200
+MOVETYPE SRL   3,2                MOVE TYPE OF ORDER HIT TO BOTTOM BYTE 00006300
+         STC   3,TYPE+3           PASS TYPE OF ORDER HIT BACK AS PARAM  00006400
+         LH    6,2(1)             DISP OF HIT ORDER ON PAGE(TAKEN FROM  00006500
+         STH   6,POINT+6          PASS DISP OF ORDER HIT BACK AS PARAM  00006600
+         LM    14,12,12(13)       RELOAD REGS                           00006700
+         LA    15,4               RETURN CODE = SUCCESS                 00006800
+         BR    14                 RETURN                                00006900
+         SPACE 3                                                        00007000
+LINK     MVC   LABEL(6),8(1)      MOVE LINKED TO LABEL TO PARAM AREA    00007100
+TAG      SR    6,6                ZERO                                  00007200
+         ST    6,POINT+8          DISP WITHIN ORDER = 0 FOR ALL EXCEPT  00007300
+         B     MOVETYPE           MOVE TYPE OF HIT ORDER AND RET        00007400
+         EJECT                                                          00007500
+ENDMAP   B     *+4(3)             BRANCH TO ROUTINE FOR LAST DM ENTRY   00007600
+         B     ERRET              TYPE = 0 => NOOP'S CANNOT BE LP'ED    00007700
+         B     STRGEND            TYPE = 1 => "CHAR STRING              00007800
+         B     BRNCHEND           TYPE = 2 => BRANCH                    00007900
+         B     LINKEND            TYPE = 3 => LINK                      00008000
+         B     ERRET              TYPE = 4 => DOES NOT EXIST            00008100
+         B     LINKEND            TYPE = 5 => TAG                       00008200
+         B     LABEND             TYPE = 6 => LABEL                     00008300
+         B     ERRET              TYPE = 7 => CANNOT LP PARA'S          00008400
+         B     ERRET              TYPE = 8 => DOES NOT EXIST            00008500
+         B     LINKEND            TYPE = 9 => COMPLEX FORMATS           00008600
+         B     LINKEND            TYPE = 10 => SIMPLE FORMATS           00008700
+         SPACE 3                                                        00008800
+STRGEND  SR    6,6                ZERO FOR THE INSETR CHAR              00008900
+         IC    6,5(1)             LENTH OS STRING CORR TO THIS DM ENTRY 00009000
+         AH    6,0(1)             STARTING BUFF ADDR OF THIS DM ENTRY   00009100
+         BCTR  6,0                FIRST CHAR IS AT START ADDR, NOT SA + 00009200
+         CR    5,6                HIT ADDR VS END OF ENTRY ADDR         00009300
+         BNH   STRING             BRANCH IF HIT IN LAST STRING          00009400
+         B     ERRET              IF HIT BEYOND LAST CHAR, ERROR        00009500
+         SPACE 2                                                        00009600
+BRNCHEND LA    6,71               MAX LEN OF EXPLAINER ON LAST LINE     00009700
+         AH    6,0(1)             PLUS ADDR WHERE LAST LINE STARTS      00009800
+         CR    5,6                HIT ADDR VS LAST POSS ADDR OF EXPL    00009900
+         BNH   LINK               BRANCH IF HIT WAS IN EXLP             00010000
+         B     ERRET              OTHERWISE, ERROR                      00010100
+LINKEND  CH    5,0(1)             HIT ADDR VS WHERE ASTERISK IS         00010200
+         BE    LINK               IF HIT ON ASTERISK, BRANCH            00010300
+ERRET    LM    14,12,12(13)       ERLOAD CALLERS ERGS                   00010400
+         SR    15,15              RETURN CODE = ERROR                   00010500
+         BR    14                 RETURN                                00010600
+         EJECT                                                          00010700
+LABEND   LA    6,20               MAX LEN OF LABEL IN BUFFER            00010800
+         B     BRNCHEND+4         CHECK IF LABEL WAS HIT OR NOT         00010900
+         SPACE 3                                                        00011000
+CHKSCRL  LA    4,X'426'(3)   BFFR STRT ADDR + DISP TO START OF GAS PEDA 00011100
+         CR    5,4                HIT ADDR VS END OF GAS PEDAL AREA     00011200
+         BH    GETDMADD           BRANCH IF HIT IN MAIN TEXT AREA       00011300
+         LA    4,X'3FC'(3)   BFFR STRT ADDR + DISP TO START OF GAS PEDA 00011400
+         CR    5,4                HIT ADDR VS START OF GAS PEDAL AREA   00011500
+         BL    ERRET              BRANCH IF HIT BELOW EXPL AREA         00011600
+*                                 (I.E. WAS IN PROMPT)                  00011700
+         SR    5,4                HIT ADDR - ADDR WHERE GAS PEDAL TEXT  00011800
+*                                 DISP INTO GAS PEDAL TEXT AREA         00011900
+         LA    1,X'1E'            LEN FROM START OF GAS PEDAL TEXT TO   00012000
+*                                 WHERE TEXT FOR SCRLBACK STARTS        00012100
+         SR    3,3                CLEAR AS INDEX ON LIST OF ADDS OF WHA 00012200
+         CR    5,1                SEE IF HE WANTS TO SCRILL BACK        00012300
+         BL    *+10               BRANCH AROUND IF HE WANTS TO SCROLL   00012400
+         LA    3,4                AW WANT ADDR OF SCROLL FORWARD ROUT   00012500
+         SR    5,1                GET DISP INTO TEXT OF MINUS SCRL      00012600
+*                                 TO POINT WHERE HIT OCCURED            00012700
+         SRL   5,1                DIVIDE BY TWO TO GET INDEX FOR MUNBER 00012800
+         IC    1,NUMLINE(5)       GET NUMBER OF LINES TO SCROLL         00012900
+GETADD   L     15,SCRLRTAD(3)     GET ADDR OF PROPER SCROLLING ROUTINE  00013000
+         LM    2,12,28(13)        RELOAD CLOBBERED REGS                 00013100
+         BR    15                 GO TO PROPER SCROLLING ROUTINE        00013200
+NUMLINE  DC    AL1(2,8,16,37,37,37)                                     00013300
+SCRLRTAD DC    A(SCRLBACK,SCROLLL)                                      00013400
+TEXTADD  DC    H'0'               WHERE HIT ADDR SAVED                  00013500
+         SPACE 3                                                        00013600
+PARMAREA DSECT                                                          00013700
+ORDLENS  DS    11F                LENTHS OF DIFFERENT TYPES OF ORDERS   00013800
+TYPE     DS    F                  WILL CONTAIN TYPE OF ORDER HIT        00013900
+POINT    DS    3F                 EWILL CONTAIN POINTER TO HIT ORDER    00014000
+LABEL    DS    2F                 WILL CONTAIN LINKED TO ORDER          00014100
+         END                                                            00014200

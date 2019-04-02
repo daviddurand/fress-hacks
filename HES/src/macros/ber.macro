@@ -1,0 +1,5 @@
+:READ  BER      MACRO    A1 TEMP    3/27/19  18:24
+         MACRO
+&LAB     BER   &LOC
+&LAB     BCR   8,&LOC
+         MEND

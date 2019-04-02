@@ -1,5 +1,0 @@
-:READ  BNZR     MACRO    A1 TEMP    3/27/19  18:24
-         MACRO
-&LAB     BNZR  &LOC
-&LAB     BCR   7,&LOC
-         MEND
